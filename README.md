@@ -1,36 +1,79 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Job Application Accountability Tracker (Phase 1)
 
-## Getting Started
+Phase 1 includes:
+- Next.js + TypeScript app
+- Prisma ORM + SQLite
+- Applications CRUD
+- Tasks CRUD
+- Dashboard summary analytics
 
-First, run the development server:
+## 1) Install
+
+```bash
+npm install
+```
+
+## 2) Configure database
+
+`.env` is already configured for local SQLite.
+
+```env
+DATABASE_URL="file:/Users/saadbeg/Documents/GitHub/job_app_tracker/prisma/dev.db"
+```
+
+If you clone this project into a different folder, update `DATABASE_URL` to your absolute path.
+
+## 3) Run migration
+
+```bash
+npm run db:migrate -- --name init
+```
+
+## 4) Run the app
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open `http://localhost:3000`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 5) Available pages
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- `/` dashboard
+- `/applications` applications CRUD
+- `/tasks` tasks CRUD
 
-## Learn More
+## API routes
 
-To learn more about Next.js, take a look at the following resources:
+Applications:
+- `GET /api/applications`
+- `POST /api/applications`
+- `GET /api/applications/[id]`
+- `PUT /api/applications/[id]`
+- `DELETE /api/applications/[id]`
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Tasks:
+- `GET /api/tasks`
+- `POST /api/tasks`
+- `GET /api/tasks/[id]`
+- `PUT /api/tasks/[id]`
+- `DELETE /api/tasks/[id]`
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Analytics:
+- `GET /api/analytics/summary`
 
-## Deploy on Vercel
+## Quality checks
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+npm run lint
+npm run build
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Notes
+
+- No auth yet.
+- No Gmail, Google Sheets, or email reporting integrations yet.
+- No Redis/RabbitMQ.
+- For local analytics testing, you can set:
+  - `ANALYTICS_TODAY_OVERRIDE=YYYY-MM-DD` to force the dashboard/API "today" date.
+  - `ANALYTICS_DEBUG=true` to log Chicago today key and per-application date-key counting.

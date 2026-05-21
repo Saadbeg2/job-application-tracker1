@@ -1,0 +1,57 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum ApplicationStatus {
+  Applied
+  Interview
+  Rejected
+  Offer
+  Withdrawn
+}
+
+enum TaskStatus {
+  pending
+  completed
+  ignored
+}
+
+model Application {
+  id             Int               @id @default(autoincrement())
+  company        String
+  role           String
+  dateApplied    DateTime
+  status         ApplicationStatus @default(Applied)
+  source         String?
+  jobLink        String
+  resumeUsed     String?
+  notes          String?
+  jobDescription String?
+  location       String?
+  referral       String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  tasks          Task[]
+}
+
+model Task {
+  id                 Int        @id @default(autoincrement())
+  applicationId      Int?
+  company            String
+  role               String?
+  title              String
+  status             TaskStatus @default(pending)
+  dueDate            DateTime?
+  sourceEmailSubject String
+  notes              String?
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+  application        Application? @relation(fields: [applicationId], references: [id], onDelete: SetNull)
+
+  @@index([applicationId])
+}
