@@ -1,14 +1,22 @@
 import { countApplicationsForTodayAndWeek } from "@/lib/analytics";
+import { ReviewItemType, ReviewStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 export default async function DashboardPage() {
-  const [applications, totalApplications, pendingTasks, recentApplications] =
+  const [applications, totalApplications, pendingTasks, pendingReviewItems, pendingStatusUpdates, pendingReviewTasks, recentApplications] =
     await Promise.all([
       prisma.application.findMany({
         select: { id: true, company: true, dateApplied: true },
       }),
       prisma.application.count(),
       prisma.task.count({ where: { status: "pending" } }),
+      prisma.reviewItem.count({ where: { reviewStatus: ReviewStatus.pending } }),
+      prisma.reviewItem.count({
+        where: { reviewStatus: ReviewStatus.pending, type: ReviewItemType.status_update },
+      }),
+      prisma.reviewItem.count({
+        where: { reviewStatus: ReviewStatus.pending, type: ReviewItemType.task },
+      }),
       prisma.application.findMany({
         orderBy: { dateApplied: "desc" },
         take: 8,
@@ -39,6 +47,18 @@ export default async function DashboardPage() {
         <article className="card">
           <p className="muted">Pending tasks</p>
           <p className="stat-value">{pendingTasks}</p>
+        </article>
+        <article className="card">
+          <p className="muted">Pending review items</p>
+          <p className="stat-value">{pendingReviewItems}</p>
+        </article>
+        <article className="card">
+          <p className="muted">Pending status updates</p>
+          <p className="stat-value">{pendingStatusUpdates}</p>
+        </article>
+        <article className="card">
+          <p className="muted">Pending review tasks</p>
+          <p className="stat-value">{pendingReviewTasks}</p>
         </article>
       </div>
 

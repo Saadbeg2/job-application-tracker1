@@ -21,6 +21,20 @@ enum TaskStatus {
   ignored
 }
 
+enum ReviewItemType {
+  new_application
+  status_update
+  task
+  unknown_job_related
+}
+
+enum ReviewStatus {
+  pending
+  approved
+  ignored
+  not_relevant
+}
+
 model Application {
   id             Int               @id @default(autoincrement())
   company        String
@@ -37,6 +51,7 @@ model Application {
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
   tasks          Task[]
+  reviewItems    ReviewItem[]      @relation("MatchedApplicationReviewItems")
 }
 
 model Task {
@@ -54,4 +69,29 @@ model Task {
   application        Application? @relation(fields: [applicationId], references: [id], onDelete: SetNull)
 
   @@index([applicationId])
+}
+
+model ReviewItem {
+  id                  Int            @id @default(autoincrement())
+  type                ReviewItemType
+  reviewStatus        ReviewStatus   @default(pending)
+  company             String
+  role                String?
+  suggestedStatus     ApplicationStatus?
+  taskTitle           String?
+  source              String?
+  gmailMessageId      String?
+  emailSender         String?
+  emailSubject        String?
+  emailReceivedAt     DateTime?
+  confidence          Float?
+  matchedApplicationId Int?
+  extractedDataJson   String?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  matchedApplication  Application?   @relation("MatchedApplicationReviewItems", fields: [matchedApplicationId], references: [id], onDelete: SetNull)
+
+  @@index([reviewStatus])
+  @@index([type])
+  @@index([matchedApplicationId])
 }
