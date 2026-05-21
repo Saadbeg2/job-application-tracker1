@@ -10,7 +10,7 @@ type Application = {
   dateApplied: string;
   status: (typeof applicationStatuses)[number];
   source: string | null;
-  jobLink: string;
+  jobLink: string | null;
   resumeUsed: string | null;
   notes: string | null;
   jobDescription: string | null;
@@ -118,7 +118,7 @@ export default function ApplicationsPage() {
       dateApplied: application.dateApplied.slice(0, 10),
       status: application.status,
       source: application.source ?? "",
-      jobLink: application.jobLink,
+      jobLink: application.jobLink ?? "",
       resumeUsed: application.resumeUsed ?? "",
       notes: application.notes ?? "",
       jobDescription: application.jobDescription ?? "",
@@ -162,8 +162,8 @@ export default function ApplicationsPage() {
             </select>
           </label>
           <label>
-            Job Link *
-            <input value={form.jobLink} onChange={(e) => updateField("jobLink", e.target.value)} required />
+            Job Link
+            <input value={form.jobLink} onChange={(e) => updateField("jobLink", e.target.value)} />
           </label>
           <label>
             Source
@@ -233,9 +233,13 @@ export default function ApplicationsPage() {
                 <td>{application.dateApplied.slice(0, 10)}</td>
                 <td>{application.status}</td>
                 <td>
-                  <a href={application.jobLink} target="_blank" rel="noopener noreferrer">
-                    Open
-                  </a>
+                  {application.jobLink ? (
+                    <a href={application.jobLink} target="_blank" rel="noopener noreferrer">
+                      Open
+                    </a>
+                  ) : (
+                    <span className="muted">No link</span>
+                  )}
                 </td>
                 <td>
                   <div className="actions">

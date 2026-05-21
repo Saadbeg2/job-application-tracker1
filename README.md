@@ -1,95 +1,86 @@
-# Job Application Accountability Tracker (Phase 1 + Phase 2)
+# Job Application Accountability Tracker (Phases 1-3)
 
-This project currently includes:
-- Next.js + TypeScript app
-- Prisma ORM + SQLite
+Current scope includes:
 - Applications CRUD
 - Tasks CRUD
-- Dashboard summary analytics
-- Review Queue foundation (`/review`) with approval workflows
+- Review Queue foundation with approval workflow
+- Gmail manual scan (read-only) that creates pending ReviewItems only
 
-No Gmail OAuth, Google Sheets sync, daily report emails, or authentication are implemented yet.
+Out of scope right now:
+- Google Sheets sync
+- Daily report emails
+- Mentor/family accounts
+- Full auth system beyond Gmail OAuth callback flow
 
-## 1) Install
+## Environment variables
+
+Create `.env` from `.env.example` and set:
+
+```env
+DATABASE_URL="file:/absolute/path/to/job_app_tracker/prisma/dev.db"
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+GOOGLE_REDIRECT_URI=
+GMAIL_SCAN_DAYS=7
+```
+
+Recommended OAuth redirect URI:
+- `http://localhost:3000/api/gmail/callback`
+
+## Install and setup
 
 ```bash
 npm install
-```
-
-## 2) Configure database
-
-`.env` is configured for local SQLite.
-
-```env
-DATABASE_URL="file:/Users/saadbeg/Documents/GitHub/job_app_tracker/prisma/dev.db"
-```
-
-If you clone this project elsewhere, update to your local absolute path.
-
-## 3) Run migration
-
-```bash
-npm run db:migrate -- --name init
-```
-
-## 4) Seed sample review queue data
-
-```bash
+npm run db:migrate -- --name add_gmail_scan
+npx prisma generate
 npm run db:seed
-```
-
-Seed includes:
-- one `new_application` review item
-- one `status_update` review item
-- one `task` review item
-- one `unknown_job_related` review item
-
-## 5) Run app
-
-```bash
 npm run dev
 ```
-
-Open `http://localhost:3000`.
 
 ## Pages
 
 - `/` dashboard
-- `/applications` applications CRUD
-- `/tasks` tasks CRUD
-- `/review` review queue
+- `/applications`
+- `/tasks`
+- `/review`
+- `/settings`
 
-## Review queue flow
+## Gmail manual scan flow
 
-- Pending items are grouped into:
-  - Possible New Applications
-  - Possible Status Updates
-  - Possible Tasks / Action Required
-  - Other Job-Related Emails
-- Per item actions:
-  - Approve
-  - Edit & Approve
-  - Ignore
-  - Not Relevant
-- Status update approval requires selecting one specific application.
-- New application approval performs duplicate checks and warns before forced approval.
-- Unknown job-related items must be converted (via Type + Edit & Approve) before approval.
+1. Open `/settings`
+2. Click **Connect Gmail**
+3. Complete Google OAuth consent
+4. Open `/review`
+5. Click **Scan Gmail**
+6. Review pending items in grouped sections and approve/edit/ignore
+
+## Privacy behavior
+
+The app only stores limited metadata:
+- `gmailMessageId`, `threadId`, sender, subject, received date
+- detected type, confidence
+- extracted company/role/suggested status/task title
+- limited extracted metadata JSON
+
+The app does **not** store:
+- full email body
+- full email thread
+- attachments
+- raw full Gmail payload
+
+Email snippet is used in memory for classification and discarded.
 
 ## API routes
 
-Applications:
-- `GET /api/applications`
-- `POST /api/applications`
-- `GET /api/applications/[id]`
-- `PUT /api/applications/[id]`
-- `DELETE /api/applications/[id]`
+Gmail connection:
+- `GET /api/gmail/status`
+- `GET /api/gmail/connect`
+- `GET /api/gmail/callback`
+- `POST /api/gmail/disconnect`
 
-Tasks:
-- `GET /api/tasks`
-- `POST /api/tasks`
-- `GET /api/tasks/[id]`
-- `PUT /api/tasks/[id]`
-- `DELETE /api/tasks/[id]`
+Gmail scan:
+- `POST /api/gmail/scan`
+- `GET /api/gmail/scan-history`
 
 Review items:
 - `GET /api/review-items`
@@ -102,9 +93,6 @@ Review items:
 - `POST /api/review-items/[id]/not-relevant`
 - `GET /api/review-items/[id]/matches`
 
-Analytics:
-- `GET /api/analytics/summary`
-
 ## Quality checks
 
 ```bash
@@ -112,7 +100,8 @@ npm run lint
 npm run build
 ```
 
-## Optional local analytics testing
+## Notes / TODOs
 
-- `ANALYTICS_TODAY_OVERRIDE=YYYY-MM-DD`
-- `ANALYTICS_DEBUG=true`
+- Tokens are stored in SQLite for local MVP only. Add encryption-at-rest before production use.
+- Gmail scope is read-only: `https://www.googleapis.com/auth/gmail.readonly`.
+- Gmail scan never creates Applications/Tasks directly; it only creates pending ReviewItems.

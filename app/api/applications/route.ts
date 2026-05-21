@@ -21,7 +21,7 @@ export async function GET() {
 export async function POST(request: Request) {
   const body = await request.json();
 
-  const required = ["company", "role", "dateApplied", "jobLink"];
+  const required = ["company", "role", "dateApplied"];
   const missing = required.filter((field) => !body?.[field]);
   if (missing.length > 0) {
     return NextResponse.json(
@@ -42,7 +42,7 @@ export async function POST(request: Request) {
       dateApplied: new Date(body.dateApplied),
       status,
       source: body.source || null,
-      jobLink: String(body.jobLink),
+      jobLink: body.jobLink?.trim() || null,
       resumeUsed: body.resumeUsed || null,
       notes: body.notes || null,
       jobDescription: body.jobDescription || null,

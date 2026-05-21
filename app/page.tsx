@@ -3,7 +3,7 @@ import { ReviewItemType, ReviewStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 export default async function DashboardPage() {
-  const [applications, totalApplications, pendingTasks, pendingReviewItems, pendingStatusUpdates, pendingReviewTasks, recentApplications] =
+  const [applications, totalApplications, pendingTasks, pendingReviewItems, pendingStatusUpdates, pendingReviewTasks, lastScan, recentApplications] =
     await Promise.all([
       prisma.application.findMany({
         select: { id: true, company: true, dateApplied: true },
@@ -17,6 +17,7 @@ export default async function DashboardPage() {
       prisma.reviewItem.count({
         where: { reviewStatus: ReviewStatus.pending, type: ReviewItemType.task },
       }),
+      prisma.scanHistory.findFirst({ orderBy: { scanEndedAt: "desc" } }),
       prisma.application.findMany({
         orderBy: { dateApplied: "desc" },
         take: 8,
@@ -59,6 +60,12 @@ export default async function DashboardPage() {
         <article className="card">
           <p className="muted">Pending review tasks</p>
           <p className="stat-value">{pendingReviewTasks}</p>
+        </article>
+        <article className="card">
+          <p className="muted">Last Gmail scan</p>
+          <p className="stat-value" style={{ fontSize: "1rem" }}>
+            {lastScan ? new Date(lastScan.scanEndedAt).toLocaleString() : "Never"}
+          </p>
         </article>
       </div>
 

@@ -10,6 +10,7 @@ export type ReviewItemInput = {
   taskTitle?: string | null;
   source?: string | null;
   gmailMessageId?: string | null;
+  threadId?: string | null;
   emailSender?: string | null;
   emailSubject?: string | null;
   emailReceivedAt?: string | null;
@@ -68,6 +69,7 @@ export function buildReviewItemData(body: ReviewItemInput) {
       taskTitle: body.taskTitle?.trim() || null,
       source: body.source?.trim() || null,
       gmailMessageId: body.gmailMessageId?.trim() || null,
+      threadId: body.threadId?.trim() || null,
       emailSender: body.emailSender?.trim() || null,
       emailSubject: body.emailSubject?.trim() || null,
       emailReceivedAt: body.emailReceivedAt ? new Date(body.emailReceivedAt) : null,

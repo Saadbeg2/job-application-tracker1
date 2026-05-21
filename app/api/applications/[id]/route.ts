@@ -35,7 +35,7 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
 
   const body = await request.json();
 
-  const required = ["company", "role", "dateApplied", "jobLink"];
+  const required = ["company", "role", "dateApplied"];
   const missing = required.filter((field) => !body?.[field]);
   if (missing.length > 0) {
     return NextResponse.json(
@@ -58,7 +58,7 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
         dateApplied: new Date(body.dateApplied),
         status,
         source: body.source || null,
-        jobLink: String(body.jobLink),
+        jobLink: body.jobLink?.trim() || null,
         resumeUsed: body.resumeUsed || null,
         notes: body.notes || null,
         jobDescription: body.jobDescription || null,

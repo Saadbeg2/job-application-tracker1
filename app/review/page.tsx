@@ -13,6 +13,7 @@ type ReviewItem = {
   taskTitle: string | null;
   source: string | null;
   gmailMessageId: string | null;
+  threadId: string | null;
   emailSender: string | null;
   emailSubject: string | null;
   emailReceivedAt: string | null;
@@ -47,6 +48,7 @@ type EditState = {
   emailSubject: string;
   emailReceivedAt: string;
   matchedApplicationId: string;
+  createMissingApplication: boolean;
 };
 
 export default function ReviewPage() {
@@ -54,11 +56,23 @@ export default function ReviewPage() {
   const [editing, setEditing] = useState<Record<number, EditState>>({});
   const [matchesById, setMatchesById] = useState<Record<number, MatchResponse>>({});
   const [errors, setErrors] = useState<Record<number, string>>({});
+  const [scanMessage, setScanMessage] = useState("");
+  const [scanLoading, setScanLoading] = useState(false);
+
+  async function readJsonSafe<T>(response: Response): Promise<T | null> {
+    const text = await response.text();
+    if (!text.trim()) return null;
+    try {
+      return JSON.parse(text) as T;
+    } catch {
+      return null;
+    }
+  }
 
   async function loadItems() {
     const response = await fetch("/api/review-items", { cache: "no-store" });
-    const data = (await response.json()) as ReviewItem[];
-    return data;
+    if (!response.ok) return [];
+    return (await response.json()) as ReviewItem[];
   }
 
   async function refresh() {
@@ -96,6 +110,7 @@ export default function ReviewPage() {
         emailSubject: item.emailSubject ?? "",
         emailReceivedAt: item.emailReceivedAt?.slice(0, 10) ?? "",
         matchedApplicationId: item.matchedApplicationId?.toString() ?? "",
+        createMissingApplication: false,
       }
     );
   }
@@ -113,36 +128,68 @@ export default function ReviewPage() {
   }
 
   async function ignoreItem(id: number) {
-    await fetch(`/api/review-items/${id}/ignore`, { method: "POST" });
+    const response = await fetch(`/api/review-items/${id}/ignore`, { method: "POST" });
+    if (!response.ok) return;
     await refresh();
   }
 
   async function notRelevantItem(id: number) {
-    await fetch(`/api/review-items/${id}/not-relevant`, { method: "POST" });
+    const response = await fetch(`/api/review-items/${id}/not-relevant`, { method: "POST" });
+    if (!response.ok) return;
     await refresh();
   }
 
-  async function approve(item: ReviewItem, useEdit: boolean, forceApprove = false) {
+  async function scanGmail() {
+    setScanLoading(true);
+    setScanMessage("");
+    try {
+      const response = await fetch("/api/gmail/scan", { method: "POST" });
+      const data = (await readJsonSafe<
+        | { error?: string }
+        | {
+            scannedMessages: number;
+            createdReviewItems: number;
+            skippedDuplicates: number;
+          }
+      >(response)) ?? { error: "Gmail scan failed." };
+
+      if (!response.ok) {
+        setScanMessage(
+          "error" in data && data.error
+            ? data.error
+            : "Gmail scan failed. Gmail is not connected. Connect Gmail in Settings first.",
+        );
+        return;
+      }
+
+      if ("scannedMessages" in data) {
+        setScanMessage(
+          `Scan complete. Scanned ${data.scannedMessages}, created ${data.createdReviewItems} review items, skipped ${data.skippedDuplicates} duplicates.`,
+        );
+      }
+      await refresh();
+    } finally {
+      setScanLoading(false);
+    }
+  }
+
+  async function approve(item: ReviewItem, forceApprove = false) {
     const e = getEdit(item);
     setErrors((prev) => ({ ...prev, [item.id]: "" }));
 
-    const payload = useEdit
-      ? {
-          type: e.type,
-          company: e.company,
-          role: e.role || null,
-          suggestedStatus: e.suggestedStatus || null,
-          taskTitle: e.taskTitle || null,
-          source: e.source || null,
-          emailSubject: e.emailSubject || null,
-          emailReceivedAt: e.emailReceivedAt || null,
-          matchedApplicationId: e.matchedApplicationId ? Number(e.matchedApplicationId) : null,
-          forceApprove,
-        }
-      : {
-          matchedApplicationId: e.matchedApplicationId ? Number(e.matchedApplicationId) : null,
-          forceApprove,
-        };
+    const payload = {
+      type: e.type,
+      company: e.company,
+      role: e.role || null,
+      suggestedStatus: e.suggestedStatus || null,
+      taskTitle: e.taskTitle || null,
+      source: e.source || null,
+      emailSubject: e.emailSubject || null,
+      emailReceivedAt: e.emailReceivedAt || null,
+      matchedApplicationId: e.matchedApplicationId ? Number(e.matchedApplicationId) : null,
+      createMissingApplication: e.createMissingApplication,
+      forceApprove,
+    };
 
     const response = await fetch(`/api/review-items/${item.id}/approve`, {
       method: "POST",
@@ -151,21 +198,32 @@ export default function ReviewPage() {
     });
 
     if (response.status === 409) {
-      const data = (await response.json()) as { error: string; duplicates?: Match[] };
+      const data = (await readJsonSafe<{ error: string; duplicates?: Match[] }>(response)) ?? {
+        error: "Possible duplicate application detected",
+      };
       const details =
         data.duplicates && data.duplicates.length > 0
           ? ` Possible duplicates: ${data.duplicates.map((d) => `#${d.id} ${d.company} ${d.role} ${d.dateKey}`).join(" | ")}`
           : "";
       setErrors((prev) => ({
         ...prev,
-        [item.id]: `${data.error}.${details} Click Edit & Approve again to confirm.`,
+        [item.id]: `${data.error}.${details}`,
       }));
+      const shouldContinue = window.confirm(
+        `${data.error}. A possible duplicate was found. Do you want to approve anyway?`,
+      );
+      if (shouldContinue) {
+        await approve(item, true);
+      }
       return;
     }
 
     if (!response.ok) {
-      const data = (await response.json()) as { error?: string };
-      setErrors((prev) => ({ ...prev, [item.id]: data.error ?? "Approval failed" }));
+      const data = await readJsonSafe<{ error?: string }>(response);
+      setErrors((prev) => ({
+        ...prev,
+        [item.id]: data?.error ?? "Approval failed. Please try again.",
+      }));
       return;
     }
 
@@ -258,18 +316,25 @@ export default function ReviewPage() {
               ))}
             </select>
           </label>
+          {item.type === "status_update" ? (
+            <label>
+              No match? Create missing application
+              <select
+                value={e.createMissingApplication ? "yes" : "no"}
+                onChange={(ev) =>
+                  setEdit(item, { createMissingApplication: ev.target.value === "yes" })
+                }
+              >
+                <option value="no">No</option>
+                <option value="yes">Yes</option>
+              </select>
+            </label>
+          ) : null}
         </div>
 
         <div className="actions">
-          <button className="primary" type="button" onClick={() => void approve(item, false)}>
+          <button className="primary" type="button" onClick={() => void approve(item)}>
             Approve
-          </button>
-          <button
-            className="secondary"
-            type="button"
-            onClick={() => void approve(item, true, errors[item.id].includes("Possible duplicate"))}
-          >
-            Edit &amp; Approve
           </button>
           <button className="secondary" type="button" onClick={() => void loadMatches(item.id)}>
             Load Matches
@@ -290,6 +355,15 @@ export default function ReviewPage() {
     <section className="page stack">
       <h2 className="section-title">Review Queue</h2>
       <p className="muted">Approve only after validating each item. Nothing is auto-applied.</p>
+      <div className="actions">
+        <button className="primary" type="button" onClick={() => void scanGmail()} disabled={scanLoading}>
+          {scanLoading ? "Scanning Gmail..." : "Scan Gmail"}
+        </button>
+        <a className="secondary" href="/settings">
+          Connect Gmail in Settings
+        </a>
+      </div>
+      {scanMessage ? <p className={scanMessage.includes("failed") || scanMessage.includes("not connected") ? "error" : "muted"}>{scanMessage}</p> : null}
 
       <section className="stack">
         <h3>Possible New Applications</h3>

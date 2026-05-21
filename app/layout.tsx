@@ -23,6 +23,7 @@ export default function RootLayout({
               <Link href="/applications">Applications</Link>
               <Link href="/tasks">Tasks</Link>
               <Link href="/review">Review Queue</Link>
+              <Link href="/settings">Settings</Link>
             </nav>
           </div>
         </header>

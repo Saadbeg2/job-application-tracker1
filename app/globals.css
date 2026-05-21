@@ -149,6 +149,31 @@ button.danger {
   color: var(--danger);
 }
 
+a.primary,
+a.secondary,
+a.danger {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 8px;
+  padding: 0.55rem 0.9rem;
+  font-weight: 600;
+}
+
+a.primary {
+  background: var(--accent);
+  color: white;
+}
+
+a.secondary {
+  background: #e6ebf5;
+  color: #253245;
+}
+
+a.danger {
+  background: #fee4e2;
+  color: var(--danger);
+}
+
 .actions {
   display: flex;
   gap: 0.5rem;
