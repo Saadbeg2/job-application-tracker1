@@ -144,3 +144,34 @@ model GoogleSheetSync {
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 }
+
+enum ReportSendStatus {
+  sent
+  failed
+}
+
+model ReportRecipient {
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String   @unique
+  timezone  String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  sendLogs  ReportSendLog[]
+}
+
+model ReportSendLog {
+  id           Int              @id @default(autoincrement())
+  recipientId  Int
+  reportDate   String
+  timezone     String
+  sentAt       DateTime
+  status       ReportSendStatus
+  errorMessage String?
+  createdAt    DateTime         @default(now())
+  recipient    ReportRecipient  @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@unique([recipientId, reportDate])
+  @@index([reportDate])
+}
