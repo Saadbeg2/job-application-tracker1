@@ -1,97 +1,104 @@
-# Job Application Accountability Tracker (Phases 1-3)
+# Job Application Accountability Tracker (Phases 1-4)
 
 Current scope includes:
 - Applications CRUD
 - Tasks CRUD
-- Review Queue foundation with approval workflow
-- Gmail manual scan (read-only) that creates pending ReviewItems only
+- Review Queue + approval workflow
+- Gmail manual scan to create pending ReviewItems
+- Google Sheets sync (manual create/connect + re-sync)
 
 Out of scope right now:
-- Google Sheets sync
 - Daily report emails
 - Mentor/family accounts
-- Full auth system beyond Gmail OAuth callback flow
+- Public sharing
+- Phase 5 features
 
 ## Environment variables
 
-Create `.env` from `.env.example` and set:
+Use `.env` (do not commit secrets):
 
 ```env
-DATABASE_URL="file:/absolute/path/to/job_app_tracker/prisma/dev.db"
+DATABASE_URL="file:./dev.db"
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
-GOOGLE_REDIRECT_URI=
+GOOGLE_REDIRECT_URI=http://localhost:3000/api/gmail/callback
 GMAIL_SCAN_DAYS=7
+GOOGLE_SHEETS_DEFAULT_TITLE=Job Application Tracker
 ```
 
-Recommended OAuth redirect URI:
-- `http://localhost:3000/api/gmail/callback`
+Optional:
 
-## Install and setup
+```env
+ANALYTICS_TODAY_OVERRIDE=
+ANALYTICS_DEBUG=false
+```
+
+## Setup
 
 ```bash
 npm install
-npm run db:migrate -- --name add_gmail_scan
+npm run db:migrate -- --name add_google_sheets_sync
 npx prisma generate
-npm run db:seed
 npm run dev
 ```
 
-## Pages
+## Google reconnect note
 
-- `/` dashboard
-- `/applications`
-- `/tasks`
-- `/review`
-- `/settings`
+Google Sheets sync requires OAuth scope:
+- `https://www.googleapis.com/auth/spreadsheets`
 
-## Gmail manual scan flow
+If your existing Google connection only had Gmail read-only scope, reconnect from `/settings`.
 
-1. Open `/settings`
-2. Click **Connect Gmail**
-3. Complete Google OAuth consent
-4. Open `/review`
-5. Click **Scan Gmail**
-6. Review pending items in grouped sections and approve/edit/ignore
+## How to create/connect tracker sheet
 
-## Privacy behavior
+1. Go to `/settings`
+2. In **Google Connection**, click **Connect/Reconnect Google**
+3. In **Google Sheets Sync**:
+   - Click **Create Tracker Sheet** to create a new spreadsheet, or
+   - Paste spreadsheet ID/URL and click **Connect Existing Sheet**
 
-The app only stores limited metadata:
-- `gmailMessageId`, `threadId`, sender, subject, received date
-- detected type, confidence
-- extracted company/role/suggested status/task title
-- limited extracted metadata JSON
+## How to re-sync
 
-The app does **not** store:
-- full email body
-- full email thread
+- In `/settings`, click **Re-sync Google Sheet**
+- This rewrites two tabs:
+  - `Applications`
+  - `Tasks`
+
+## What is synced
+
+Applications tab columns:
+- Date Applied, Company, Role, Status, Source, Job Link, Resume Used, Location, Referral, Notes, Created At, Last Updated
+
+Tasks tab columns:
+- Date Found, Company, Role, Task, Task Status, Due Date, Source Email Subject, Notes, Created At, Last Updated
+
+Null fields sync as blank cells.
+
+## What is NOT synced
+
+- ReviewItems
+- Gmail full email bodies
+- Gmail full threads
 - attachments
-- raw full Gmail payload
-
-Email snippet is used in memory for classification and discarded.
+- raw Gmail payloads
+- access/refresh tokens
 
 ## API routes
 
-Gmail connection:
+Google Sheets:
+- `GET /api/google-sheets/status`
+- `POST /api/google-sheets/create`
+- `POST /api/google-sheets/connect`
+- `POST /api/google-sheets/sync`
+- `POST /api/google-sheets/disconnect`
+
+Gmail:
 - `GET /api/gmail/status`
 - `GET /api/gmail/connect`
 - `GET /api/gmail/callback`
 - `POST /api/gmail/disconnect`
-
-Gmail scan:
 - `POST /api/gmail/scan`
 - `GET /api/gmail/scan-history`
-
-Review items:
-- `GET /api/review-items`
-- `POST /api/review-items`
-- `GET /api/review-items/[id]`
-- `PUT /api/review-items/[id]`
-- `DELETE /api/review-items/[id]`
-- `POST /api/review-items/[id]/approve`
-- `POST /api/review-items/[id]/ignore`
-- `POST /api/review-items/[id]/not-relevant`
-- `GET /api/review-items/[id]/matches`
 
 ## Quality checks
 
@@ -100,8 +107,8 @@ npm run lint
 npm run build
 ```
 
-## Notes / TODOs
+## Limitations / TODO
 
-- Tokens are stored in SQLite for local MVP only. Add encryption-at-rest before production use.
-- Gmail scope is read-only: `https://www.googleapis.com/auth/gmail.readonly`.
-- Gmail scan never creates Applications/Tasks directly; it only creates pending ReviewItems.
+- Sheets sync is manual-first for reliability (Create/Re-sync buttons in Settings).
+- Auto-sync hooks can be added later if desired.
+- Token storage is local MVP style; add encryption-at-rest before production.

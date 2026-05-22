@@ -116,6 +116,7 @@ model GmailConnection {
   accessToken          String
   refreshToken         String?
   expiryDate           DateTime?
+  grantedScopes        String?
   connectedAt          DateTime @default(now())
   updatedAt            DateTime @updatedAt
 }
@@ -129,4 +130,17 @@ model ScanHistory {
   resultCount             Int
   createdReviewItemsCount Int
   createdAt               DateTime @default(now())
+}
+
+model GoogleSheetSync {
+  id                    Int      @id @default(autoincrement())
+  spreadsheetId         String
+  spreadsheetUrl        String
+  applicationsSheetName String   @default("Applications")
+  tasksSheetName        String   @default("Tasks")
+  lastSyncedAt          DateTime?
+  lastSyncStatus        String?
+  lastSyncError         String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 }

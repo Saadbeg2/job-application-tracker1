@@ -19,7 +19,7 @@ export default async function DashboardPage() {
       }),
       prisma.scanHistory.findFirst({ orderBy: { scanEndedAt: "desc" } }),
       prisma.application.findMany({
-        orderBy: { dateApplied: "desc" },
+        orderBy: [{ dateApplied: "desc" }, { createdAt: "desc" }, { updatedAt: "desc" }],
         take: 8,
       }),
     ]);

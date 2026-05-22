@@ -1,4 +1,4 @@
-import { scanDays } from "@/lib/gmail";
+import { hasSheetsScope, scanDays } from "@/lib/gmail";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
@@ -12,5 +12,6 @@ export async function GET() {
     connectedAt: connection?.connectedAt ?? null,
     lastScanAt: lastScan?.scanEndedAt ?? null,
     scanWindowDays: scanDays(),
+    missingSheetsScope: connection ? !hasSheetsScope(connection.grantedScopes) : false,
   });
 }

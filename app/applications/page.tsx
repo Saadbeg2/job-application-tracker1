@@ -1,7 +1,7 @@
 "use client";
 
 import { applicationStatuses } from "@/lib/constants";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type Application = {
   id: number;
@@ -53,6 +53,8 @@ export default function ApplicationsPage() {
   const [form, setForm] = useState<FormState>(initialForm);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [error, setError] = useState("");
+  const formContainerRef = useRef<HTMLDivElement | null>(null);
+  const companyInputRef = useRef<HTMLInputElement | null>(null);
 
   async function loadApplications() {
     const response = await fetch("/api/applications", { cache: "no-store" });
@@ -125,18 +127,27 @@ export default function ApplicationsPage() {
       location: application.location ?? "",
       referral: application.referral ?? "",
     });
+    formContainerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    window.setTimeout(() => {
+      companyInputRef.current?.focus();
+    }, 250);
   }
 
   return (
     <section className="page stack">
       <h2 className="section-title">Applications</h2>
 
-      <div className="card stack">
+      <div ref={formContainerRef} className="card stack">
         <h3>{editingId ? "Edit Application" : "New Application"}</h3>
         <div className="form-grid">
           <label>
             Company *
-            <input value={form.company} onChange={(e) => updateField("company", e.target.value)} required />
+            <input
+              ref={companyInputRef}
+              value={form.company}
+              onChange={(e) => updateField("company", e.target.value)}
+              required
+            />
           </label>
           <label>
             Role *

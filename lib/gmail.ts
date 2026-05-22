@@ -2,6 +2,7 @@ import { PrismaClient, ReviewItemType } from "@prisma/client";
 import { gmailScanQuery } from "@/lib/gmailClassifier";
 
 const GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.readonly";
+const SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets";
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GMAIL_API_BASE = "https://gmail.googleapis.com/gmail/v1/users/me";
@@ -25,7 +26,7 @@ export function buildConnectUrl() {
     client_id: clientId,
     redirect_uri: redirectUri,
     response_type: "code",
-    scope: GMAIL_SCOPE,
+    scope: `${GMAIL_SCOPE} ${SHEETS_SCOPE}`,
     access_type: "offline",
     prompt: "consent",
   });
@@ -37,6 +38,7 @@ type TokenResponse = {
   access_token: string;
   refresh_token?: string;
   expires_in?: number;
+  scope?: string;
 };
 
 export async function exchangeCodeForTokens(code: string) {
@@ -127,6 +129,11 @@ export async function getValidAccessToken(prisma: PrismaClient) {
   return { accessToken: refreshed.access_token, connectionId: connection.id };
 }
 
+export function hasSheetsScope(scopes: string | null | undefined) {
+  if (!scopes) return false;
+  return scopes.split(/\s+/).includes(SHEETS_SCOPE);
+}
+
 type GmailMessageListResponse = {
   messages?: Array<{ id: string; threadId: string }>;
 };
@@ -196,6 +203,7 @@ export function scanWindow() {
 }
 
 export const GMAIL_READONLY_SCOPE = GMAIL_SCOPE;
+export const GOOGLE_SHEETS_SCOPE = SHEETS_SCOPE;
 
 export function mapDetectedType(type: ReviewItemType) {
   return type;

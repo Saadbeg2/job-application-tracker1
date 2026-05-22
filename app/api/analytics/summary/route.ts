@@ -20,7 +20,7 @@ export async function GET() {
       }),
       prisma.scanHistory.findFirst({ orderBy: { scanEndedAt: "desc" } }),
       prisma.application.findMany({
-        orderBy: { dateApplied: "desc" },
+        orderBy: [{ dateApplied: "desc" }, { createdAt: "desc" }, { updatedAt: "desc" }],
         take: 5,
       }),
     ]);

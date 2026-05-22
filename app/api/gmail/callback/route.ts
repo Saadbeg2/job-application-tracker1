@@ -31,6 +31,7 @@ export async function GET(request: Request) {
           accessToken: tokens.access_token,
           refreshToken: tokens.refresh_token ?? existing.refreshToken,
           expiryDate,
+          grantedScopes: tokens.scope ?? existing.grantedScopes,
         },
       });
     } else {
@@ -40,6 +41,7 @@ export async function GET(request: Request) {
           accessToken: tokens.access_token,
           refreshToken: tokens.refresh_token ?? null,
           expiryDate,
+          grantedScopes: tokens.scope ?? null,
         },
       });
     }

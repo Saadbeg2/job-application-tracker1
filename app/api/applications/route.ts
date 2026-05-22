@@ -12,7 +12,7 @@ function validateStatus(status: string | undefined) {
 
 export async function GET() {
   const applications = await prisma.application.findMany({
-    orderBy: { dateApplied: "desc" },
+    orderBy: [{ dateApplied: "desc" }, { createdAt: "desc" }, { updatedAt: "desc" }],
   });
 
   return NextResponse.json(applications);
