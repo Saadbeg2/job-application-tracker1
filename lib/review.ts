@@ -1,11 +1,13 @@
 import { ApplicationStatus, ReviewItemType, ReviewStatus } from "@prisma/client";
 import { applicationStatuses, reviewItemTypes, reviewStatuses } from "@/lib/constants";
+import { parseDateInputToStoredDateInChicago, toChicagoDateKey } from "@/lib/dates";
 
 export type ReviewItemInput = {
   type?: string;
   reviewStatus?: string;
   company?: string;
   role?: string | null;
+  location?: string | null;
   suggestedStatus?: string | null;
   taskTitle?: string | null;
   source?: string | null;
@@ -41,7 +43,7 @@ export function normalizeApplicationStatus(value: string | undefined | null) {
 }
 
 export function dateOnlyKey(date: Date) {
-  return date.toISOString().slice(0, 10);
+  return toChicagoDateKey(date);
 }
 
 export function buildReviewItemData(body: ReviewItemInput) {
@@ -65,6 +67,7 @@ export function buildReviewItemData(body: ReviewItemInput) {
       reviewStatus,
       company,
       role: body.role?.trim() || null,
+      location: body.location?.trim() || null,
       suggestedStatus,
       taskTitle: body.taskTitle?.trim() || null,
       source: body.source?.trim() || null,
@@ -72,7 +75,7 @@ export function buildReviewItemData(body: ReviewItemInput) {
       threadId: body.threadId?.trim() || null,
       emailSender: body.emailSender?.trim() || null,
       emailSubject: body.emailSubject?.trim() || null,
-      emailReceivedAt: body.emailReceivedAt ? new Date(body.emailReceivedAt) : null,
+      emailReceivedAt: body.emailReceivedAt ? parseDateInputToStoredDateInChicago(body.emailReceivedAt) : null,
       confidence: body.confidence ?? null,
       matchedApplicationId: body.matchedApplicationId ?? null,
       extractedDataJson: body.extractedDataJson?.trim() || null,

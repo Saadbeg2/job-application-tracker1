@@ -23,8 +23,9 @@ export default function RootLayout({
               <Link href="/applications">Applications</Link>
               <Link href="/tasks">Tasks</Link>
               <Link href="/review">Review Queue</Link>
-              <Link href="/settings">Settings</Link>
-              <Link href="/demo">Demo</Link>
+              <Link href="/settings" aria-label="Settings" title="Settings">
+                <span aria-hidden="true">⚙</span>
+              </Link>
             </nav>
           </div>
         </header>

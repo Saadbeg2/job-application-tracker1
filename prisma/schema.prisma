@@ -77,6 +77,7 @@ model ReviewItem {
   reviewStatus        ReviewStatus   @default(pending)
   company             String
   role                String?
+  location            String?
   suggestedStatus     ApplicationStatus?
   taskTitle           String?
   source              String?
@@ -150,6 +151,20 @@ enum ReportSendStatus {
   failed
 }
 
+enum WorkMode {
+  Remote
+  Hybrid
+  OnSite
+  Unknown
+}
+
+enum DiscoveredJobStatus {
+  new
+  saved
+  ignored
+  applied
+}
+
 model ReportRecipient {
   id        Int      @id @default(autoincrement())
   name      String
@@ -174,4 +189,24 @@ model ReportSendLog {
 
   @@unique([recipientId, reportDate])
   @@index([reportDate])
+}
+
+model DiscoveredJob {
+  id          Int                 @id @default(autoincrement())
+  companyName String
+  title       String
+  location    String?
+  workMode    WorkMode            @default(Unknown)
+  jobUrl      String              @unique
+  description String?
+  dateFound   DateTime
+  fitScore    Int?
+  fitReason   String?
+  status      DiscoveredJobStatus @default(new)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@index([status])
+  @@index([fitScore])
+  @@index([dateFound])
 }

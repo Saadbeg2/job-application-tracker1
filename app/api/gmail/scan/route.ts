@@ -3,6 +3,7 @@ import { getValidAccessToken, listJobRelatedMessageIds, fetchMessageMetadata, ma
 import { prisma } from "@/lib/prisma";
 import { ReviewStatus } from "@prisma/client";
 import { NextResponse } from "next/server";
+import { dateToChicagoStoredDate, toChicagoDateKey } from "@/lib/dates";
 
 export async function POST() {
   const scanStartedAt = new Date();
@@ -34,6 +35,7 @@ export async function POST() {
       }
 
       const metadata = await fetchMessageMetadata(accessToken, messageRef.id);
+      const receivedAtForReview = metadata.receivedAt ? dateToChicagoStoredDate(metadata.receivedAt) : null;
 
       // Privacy rule: snippet is only used in memory for classification and never persisted.
       const classified = classifyGmailMessage({
@@ -55,6 +57,7 @@ export async function POST() {
             reviewStatus: ReviewStatus.pending,
             company: classified.company || "Unknown Company",
             role: classified.role,
+            location: classified.location,
             suggestedStatus: classified.suggestedStatus,
             taskTitle: classified.taskTitle,
             source: "Gmail",
@@ -62,11 +65,13 @@ export async function POST() {
             threadId: metadata.threadId,
             emailSender: metadata.sender || null,
             emailSubject: metadata.subject || null,
-            emailReceivedAt: metadata.receivedAt,
+            emailReceivedAt: receivedAtForReview,
             confidence: classified.confidence,
             extractedDataJson: JSON.stringify({
               reason: classified.reason,
               senderDomain: metadata.sender.split("@")[1] ?? null,
+              location: classified.location,
+              chicagoReceivedDate: metadata.receivedAt ? toChicagoDateKey(metadata.receivedAt) : null,
             }),
           },
         });

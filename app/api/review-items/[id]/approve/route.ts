@@ -2,11 +2,13 @@ import { ApplicationStatus, ReviewItemType, ReviewStatus, TaskStatus } from "@pr
 import { prisma } from "@/lib/prisma";
 import { dateOnlyKey, normalizeApplicationStatus, normalizeReviewType, roleSimilarityScore } from "@/lib/review";
 import { NextResponse } from "next/server";
+import { dateToChicagoStoredDate, parseDateInputToStoredDateInChicago } from "@/lib/dates";
 
 type ApprovePayload = {
   type?: string;
   company?: string;
   role?: string;
+  location?: string;
   suggestedStatus?: string;
   taskTitle?: string;
   source?: string;
@@ -20,6 +22,19 @@ type ApprovePayload = {
 function parseId(id: string) {
   const parsed = Number(id);
   return Number.isInteger(parsed) ? parsed : null;
+}
+
+function extractLocationFromReviewItem(extractedDataJson: string | null) {
+  if (!extractedDataJson) return null;
+  try {
+    const parsed = JSON.parse(extractedDataJson) as Record<string, unknown>;
+    const candidate = parsed.location;
+    if (typeof candidate !== "string") return null;
+    const cleaned = candidate.trim();
+    return cleaned || null;
+  } catch {
+    return null;
+  }
 }
 
 function extractJobLinkFromReviewItem(extractedDataJson: string | null) {
@@ -65,6 +80,9 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     const effectiveType = normalizeReviewType(body.type) ?? reviewItem.type;
     const company = (body.company ?? reviewItem.company).trim();
     const role = (body.role ?? reviewItem.role ?? "").trim() || null;
+    const location =
+      (body.location ?? reviewItem.location ?? extractLocationFromReviewItem(reviewItem.extractedDataJson) ?? "").trim() ||
+      null;
     const source = (body.source ?? reviewItem.source ?? "Gmail").trim() || "Gmail";
     const suggestedStatus =
       normalizeApplicationStatus(body.suggestedStatus ?? reviewItem.suggestedStatus ?? undefined) ??
@@ -72,8 +90,10 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     const taskTitle = (body.taskTitle ?? reviewItem.taskTitle ?? "").trim();
     const emailSubject = (body.emailSubject ?? reviewItem.emailSubject ?? "").trim() || "manual";
     const emailReceivedAt = body.emailReceivedAt
-      ? new Date(body.emailReceivedAt)
-      : reviewItem.emailReceivedAt ?? new Date();
+      ? parseDateInputToStoredDateInChicago(body.emailReceivedAt)
+      : reviewItem.emailReceivedAt
+        ? dateToChicagoStoredDate(reviewItem.emailReceivedAt)
+        : dateToChicagoStoredDate(new Date());
 
     if (!company) {
       return NextResponse.json({ error: "company is required" }, { status: 400 });
@@ -101,6 +121,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
           data: {
             company,
             role,
+            location,
             dateApplied,
             status: ApplicationStatus.Applied,
             source,
@@ -114,6 +135,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
             type: effectiveType,
             company,
             role,
+            location,
             source,
             reviewStatus: ReviewStatus.approved,
             matchedApplicationId: app.id,
@@ -149,6 +171,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
             type: effectiveType,
             company,
             role,
+            location,
             taskTitle,
             reviewStatus: ReviewStatus.approved,
             matchedApplicationId: body.matchedApplicationId ?? reviewItem.matchedApplicationId ?? null,
@@ -187,6 +210,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
             data: {
               company,
               role,
+              location,
               status: suggestedStatus,
               dateApplied: emailReceivedAt,
               source: "Gmail Backfill",
@@ -201,6 +225,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
               type: effectiveType,
               company,
               role,
+              location,
               suggestedStatus,
               matchedApplicationId: createdApplication.id,
               reviewStatus: ReviewStatus.approved,
@@ -234,6 +259,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
             type: effectiveType,
             company,
             role,
+            location,
             suggestedStatus,
             matchedApplicationId: selectedId,
             reviewStatus: ReviewStatus.approved,

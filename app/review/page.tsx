@@ -1,6 +1,7 @@
 "use client";
 
 import { applicationStatuses, reviewItemTypes } from "@/lib/constants";
+import { toChicagoDateKey } from "@/lib/dates";
 import { useEffect, useMemo, useState } from "react";
 
 type ReviewItem = {
@@ -9,6 +10,7 @@ type ReviewItem = {
   reviewStatus: "pending" | "approved" | "ignored" | "not_relevant";
   company: string;
   role: string | null;
+  location: string | null;
   suggestedStatus: (typeof applicationStatuses)[number] | null;
   taskTitle: string | null;
   source: string | null;
@@ -42,6 +44,7 @@ type EditState = {
   type: (typeof reviewItemTypes)[number];
   company: string;
   role: string;
+  location: string;
   suggestedStatus: string;
   taskTitle: string;
   source: string;
@@ -104,6 +107,7 @@ export default function ReviewPage() {
         type: item.type,
         company: item.company,
         role: item.role ?? "",
+        location: item.location ?? "",
         suggestedStatus: item.suggestedStatus ?? "Applied",
         taskTitle: item.taskTitle ?? "",
         source: item.source ?? "Gmail",
@@ -181,6 +185,7 @@ export default function ReviewPage() {
       type: e.type,
       company: e.company,
       role: e.role || null,
+      location: e.location || null,
       suggestedStatus: e.suggestedStatus || null,
       taskTitle: e.taskTitle || null,
       source: e.source || null,
@@ -240,9 +245,10 @@ export default function ReviewPage() {
           <p><strong>Type:</strong> {item.type}</p>
           <p><strong>Company:</strong> {item.company}</p>
           <p><strong>Role:</strong> {item.role ?? "-"}</p>
+          <p><strong>Location:</strong> {item.location ?? "-"}</p>
           <p><strong>Email subject:</strong> {item.emailSubject ?? "-"}</p>
           <p><strong>Sender:</strong> {item.emailSender ?? "-"}</p>
-          <p><strong>Received:</strong> {item.emailReceivedAt ? item.emailReceivedAt.slice(0, 10) : "-"}</p>
+          <p><strong>Received:</strong> {item.emailReceivedAt ? toChicagoDateKey(new Date(item.emailReceivedAt)) : "-"}</p>
           <p><strong>Confidence:</strong> {item.confidence ?? "-"}</p>
           <p><strong>Suggested status:</strong> {item.suggestedStatus ?? "-"}</p>
           <p><strong>Task title:</strong> {item.taskTitle ?? "-"}</p>
@@ -268,6 +274,10 @@ export default function ReviewPage() {
           <label>
             Role
             <input value={e.role} onChange={(ev) => setEdit(item, { role: ev.target.value })} />
+          </label>
+          <label>
+            Location
+            <input value={e.location} onChange={(ev) => setEdit(item, { location: ev.target.value })} />
           </label>
           <label>
             Suggested Status

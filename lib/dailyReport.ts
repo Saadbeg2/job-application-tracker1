@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import { toChicagoDateKey } from "@/lib/dates";
 
 export const SUPPORTED_TIMEZONES = ["Asia/Karachi", "America/Chicago", "Europe/London"] as const;
 const REPORT_TIMEZONE = "America/Chicago";
@@ -67,7 +68,7 @@ export async function buildDailyReport(prisma: PrismaClient) {
     prisma.googleSheetSync.findFirst({ orderBy: { updatedAt: "desc" } }),
   ]);
 
-  const submittedYesterday = applications.filter((a) => a.dateApplied.toISOString().slice(0, 10) === reportDate);
+  const submittedYesterday = applications.filter((a) => toChicagoDateKey(a.dateApplied) === reportDate);
   const applicationsYesterdayCount = submittedYesterday.length;
   const sheetUrl = getConfiguredGoogleSheetUrl(syncConfig?.spreadsheetUrl ?? null);
 

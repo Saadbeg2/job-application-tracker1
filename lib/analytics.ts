@@ -1,23 +1,4 @@
-const CHICAGO_TZ = "America/Chicago";
-
-function dateKeyFromParts(date: Date, timeZone: string) {
-  const formatter = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  });
-  const parts = formatter.formatToParts(date);
-  const year = parts.find((part) => part.type === "year")?.value;
-  const month = parts.find((part) => part.type === "month")?.value;
-  const day = parts.find((part) => part.type === "day")?.value;
-
-  if (!year || !month || !day) {
-    throw new Error("Failed to build date key");
-  }
-
-  return `${year}-${month}-${day}`;
-}
+import { dateOnlyKeyFromStoredDate, getTodayChicagoDateKey } from "@/lib/dates";
 
 function addDaysToDateKey(dateKey: string, days: number) {
   const date = new Date(`${dateKey}T00:00:00Z`);
@@ -44,11 +25,7 @@ function debugEnabled() {
 function getChicagoTodayKey() {
   const override = parseTodayOverride();
   if (override) return override;
-  return dateKeyFromParts(new Date(), CHICAGO_TZ);
-}
-
-function dateAppliedToDateOnlyKey(dateApplied: Date) {
-  return dateApplied.toISOString().slice(0, 10);
+  return getTodayChicagoDateKey();
 }
 
 export function getChicagoTodayAndWeekRange() {
@@ -69,7 +46,7 @@ export function countApplicationsForTodayAndWeek(
   let applicationsThisWeek = 0;
 
   for (const application of applications) {
-    const key = dateAppliedToDateOnlyKey(application.dateApplied);
+    const key = dateOnlyKeyFromStoredDate(application.dateApplied);
     const isToday = key === todayKey;
     const inWeek = key >= weekStartKey && key <= weekEndKey;
 

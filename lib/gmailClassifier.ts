@@ -11,6 +11,7 @@ type ClassificationResult = {
   confidence: number;
   company: string;
   role: string | null;
+  location: string | null;
   suggestedStatus: ApplicationStatus | null;
   taskTitle: string | null;
   reason: string;
@@ -25,6 +26,14 @@ const newApplicationPhrases = [
   "your application has been submitted",
   "thank you for your interest",
   "we have received your application",
+  "we've received your resume",
+  "we have received your resume",
+  "your resume has been received",
+  "resume has been received",
+  "received your resume",
+  "reviewed by our recruiting team",
+  "thank you for your interest in employment at",
+  "interest in employment at",
 ];
 
 const rejectionPhrases = [
@@ -133,9 +142,30 @@ const newsletterIndicators = [
 ];
 
 const likelyNewsletterSenderIndicators = ["leetcode.com", "newsletter", "newsletters", "marketing"];
+const jobPlatformDomains = [
+  "indeed.com",
+  "linkedin.com",
+  "myworkday.com",
+  "greenhouse.io",
+  "lever.co",
+  "smartrecruiters.com",
+  "icims.com",
+  "applytojob.com",
+];
 
 function includesAny(text: string, phrases: string[]) {
   return phrases.some((phrase) => text.includes(phrase));
+}
+
+function extractDisplayNameFromSender(sender: string) {
+  const trimmed = sender.trim();
+  const angleIndex = trimmed.indexOf("<");
+  const rawDisplay = angleIndex > 0 ? trimmed.slice(0, angleIndex).trim() : "";
+  const cleaned = rawDisplay.replace(/^["']|["']$/g, "").trim();
+  if (!cleaned) return null;
+  if (cleaned.includes("@")) return null;
+  if (/^(noreply|no-reply|notifications?)$/i.test(cleaned)) return null;
+  return cleaned;
 }
 
 function extractCompanyFromSender(sender: string) {
@@ -145,7 +175,6 @@ function extractCompanyFromSender(sender: string) {
   const domain = email.split("@")[1] ?? "";
   const domainLower = domain.toLowerCase();
 
-  // Workday special-case: "dow@myworkday.com" should map to "Dow", not "Myworkday".
   if (domainLower.includes("myworkday.com") && localPart) {
     return localPart
       .split(/[._-]/)
@@ -154,12 +183,16 @@ function extractCompanyFromSender(sender: string) {
       .join(" ");
   }
 
-  if (domainLower.includes("amazon.jobs")) {
-    return "Amazon";
+  if (domainLower.includes("amazon.jobs")) return "Amazon";
+  if (domainLower.includes("nagarro.com")) return "Nagarro";
+  if (domainLower.includes("indeed.com")) return "Unknown Company";
+  if (domainLower.includes("applytojob.com")) {
+    return extractDisplayNameFromSender(sender) ?? "Unknown Company";
   }
 
-  if (domainLower.includes("nagarro.com")) {
-    return "Nagarro";
+  const fromPlatform = jobPlatformDomains.some((platformDomain) => domainLower.includes(platformDomain));
+  if (fromPlatform) {
+    return extractDisplayNameFromSender(sender) ?? "Unknown Company";
   }
 
   const domainLabel = domain.split(".")[0] ?? "";
@@ -168,6 +201,48 @@ function extractCompanyFromSender(sender: string) {
     .split(/[-_]/)
     .map((chunk) => chunk.charAt(0).toUpperCase() + chunk.slice(1))
     .join(" ");
+}
+
+function extractLocation(text: string) {
+  const cleanedText = text.replace(/\s+/g, " ").trim();
+
+  const remoteMatch = cleanedText.match(/\b(remote,\s*us|united states remote|remote|hybrid)\b/i);
+  if (remoteMatch?.[1]) {
+    const raw = remoteMatch[1].trim();
+    if (/^remote,\s*us$/i.test(raw)) return "Remote, US";
+    if (/^united states remote$/i.test(raw)) return "United States Remote";
+    if (/^hybrid$/i.test(raw)) return "Hybrid";
+    return "Remote";
+  }
+
+  const labelMatch = cleanedText.match(
+    /\b(?:job location|location):\s*([A-Za-z .'-]+,\s*[A-Z]{2}|remote(?:,\s*[A-Za-z]+)?|united states remote|hybrid)\b/i,
+  );
+  if (labelMatch?.[1]) return labelMatch[1].trim();
+
+  const dashMatch = cleanedText.match(
+    /\b([A-Z][A-Za-z0-9 '&.-]{1,80}|[A-Za-z0-9][A-Za-z0-9 /,&()-]{1,80})\s*-\s*([A-Za-z .'-]+,\s*[A-Z]{2}|remote(?:,\s*[A-Za-z]+)?|united states remote|hybrid)\b/,
+  );
+  if (dashMatch?.[2]) return dashMatch[2].trim();
+
+  const cityStateMatch = cleanedText.match(/\b([A-Za-z .'-]+,\s*[A-Z]{2})\b/);
+  if (cityStateMatch?.[1]) return cityStateMatch[1].trim();
+
+  return null;
+}
+
+function extractIndeedCompany(text: string) {
+  const cleanedText = text.replace(/\s+/g, " ").trim();
+
+  const sentToMatch = cleanedText.match(/the following items were sent to\s+([A-Za-z0-9][A-Za-z0-9 &.-]{1,80})/i);
+  if (sentToMatch?.[1]) return sentToMatch[1].trim();
+
+  const companyDashLocationMatch = cleanedText.match(
+    /\b([A-Z][A-Za-z0-9 '&.-]{1,80})\s*-\s*([A-Za-z .'-]+,\s*[A-Z]{2}|remote(?:,\s*[A-Za-z]+)?|united states remote|hybrid)\b/,
+  );
+  if (companyDashLocationMatch?.[1]) return companyDashLocationMatch[1].trim();
+
+  return null;
 }
 
 function extractCompany(text: string, sender: string) {
@@ -179,24 +254,20 @@ function extractCompany(text: string, sender: string) {
     /applying to\s+([A-Za-z0-9][A-Za-z0-9 &.-]{1,80})(?:[.!,:;]|$)/i,
     /\bat\s+([A-Za-z0-9][A-Za-z0-9 &.-]{1,80})(?:[.!,:;]|$)/i,
     /thanks for applying to\s+([A-Za-z0-9 &.-]+)/i,
+    /interest in employment at\s+([A-Za-z0-9][A-Za-z0-9 &.-]{1,80})(?:[.!,:;]|$)/i,
     /your application to\s+([A-Za-z0-9 &.-]+)/i,
     /interview with\s+([A-Za-z0-9 &.-]+)/i,
   ];
 
   for (const pattern of patterns) {
     const match = cleanedText.match(pattern);
-    if (match?.[1]) {
-      const candidate = match[1].trim();
-      // Guard against role phrases being mistaken for company names.
-      if (/^the position\b/i.test(candidate) || /^position\b/i.test(candidate)) {
-        continue;
-      }
-      // Guard against extracting the user's name from phrases like "Interview with Saad Beg".
-      if (/^[A-Z][a-z]+\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?$/.test(candidate)) {
-        continue;
-      }
-      return candidate;
-    }
+    if (!match?.[1]) continue;
+    const candidate = match[1].trim();
+
+    if (/^the position\b/i.test(candidate) || /^position\b/i.test(candidate)) continue;
+    if (/^[A-Z][a-z]+\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?$/.test(candidate)) continue;
+
+    return candidate;
   }
 
   return extractCompanyFromSender(sender);
@@ -205,6 +276,7 @@ function extractCompany(text: string, sender: string) {
 function extractRole(text: string) {
   const cleaned = text.replace(/\s+/g, " ").trim();
   const patterns = [
+    /indeed application:\s*([^\n\r]+?)(?:\s{2,}|$)/i,
     /(?:the\s+)?position\s+of\s+([A-Za-z0-9][A-Za-z0-9 /,&()-]{1,100}?)(?:\s+at\s+[A-Za-z0-9]|[.!,:;]|$)/i,
     /about\s+the\s+([A-Za-z0-9][A-Za-z0-9 /,&()-]{1,100}?)\s+position/i,
     /appl(?:y|ied)\s+to\s+the\s+position\s+for\s+([A-Za-z0-9][A-Za-z0-9 /,&()-]{1,80}?)(?:[.!,:;]|$)/i,
@@ -239,9 +311,14 @@ function chooseTaskTitle(text: string) {
 export function classifyGmailMessage(input: ClassifierInput): ClassificationResult {
   const merged = `${input.subject} ${input.snippet}`.toLowerCase();
   const sourceText = `${input.subject} ${input.snippet}`;
-  const company = extractCompany(sourceText, input.sender);
-  const role = extractRole(sourceText);
   const senderLower = input.sender.toLowerCase();
+
+  const isIndeedSender = senderLower.includes("indeed.com") || senderLower.includes("indeed apply");
+  const indeedCompany = isIndeedSender ? extractIndeedCompany(sourceText) : null;
+
+  const company = indeedCompany ?? extractCompany(sourceText, input.sender);
+  const role = extractRole(sourceText);
+  const location = extractLocation(sourceText);
 
   const hasStrongApplicationSignal =
     includesAny(merged, newApplicationPhrases) ||
@@ -249,7 +326,8 @@ export function classifyGmailMessage(input: ClassifierInput): ClassificationResu
     includesAny(merged, interviewPhrases) ||
     includesAny(merged, taskPhrases) ||
     includesAny(merged, strongOfferPhrases) ||
-    /your application was sent to\s+/i.test(sourceText);
+    /your application was sent to\s+/i.test(sourceText) ||
+    /interest in employment at\s+/i.test(sourceText);
 
   const hasActionWords = includesAny(merged, actionWords);
   const hasJobContext = includesAny(merged, jobContextIndicators);
@@ -265,26 +343,26 @@ export function classifyGmailMessage(input: ClassifierInput): ClassificationResu
     includesAny(merged, newsletterIndicators) ||
     likelyNewsletterSenderIndicators.some((indicator) => senderLower.includes(indicator));
 
-  // Filter generic digests/promotions unless there is explicit application-status/task language.
   if (looksLikeNewsletter && !hasStrongApplicationSignal) {
     return {
       type: ReviewItemType.unknown_job_related,
       confidence: 0.1,
       company,
       role,
+      location,
       suggestedStatus: null,
       taskTitle: null,
       reason: "Newsletter/promotional content detected without strong application signal",
     };
   }
 
-  // Ignore generic account/security verification emails unless they clearly include job/candidate context.
   if (hasConsumerVerificationSignals && (!hasJobContext || !hasStrongApplicationSignal)) {
     return {
       type: ReviewItemType.unknown_job_related,
       confidence: 0.1,
       company,
       role,
+      location,
       suggestedStatus: null,
       taskTitle: null,
       reason: "Consumer account/security verification pattern detected without job context",
@@ -297,13 +375,33 @@ export function classifyGmailMessage(input: ClassifierInput): ClassificationResu
       confidence: 0.1,
       company,
       role,
+      location,
       suggestedStatus: null,
       taskTitle: null,
       reason: "Consumer finance/banking notification detected without job context",
     };
   }
 
-  const isLinkedInSender = input.sender.toLowerCase().includes("linkedin.com");
+  const hasIndeedApplicationSignals =
+    isIndeedSender &&
+    (/indeed application:\s*/i.test(sourceText) ||
+      /application submitted/i.test(sourceText) ||
+      /the following items were sent to\s+/i.test(sourceText));
+
+  if (hasIndeedApplicationSignals) {
+    return {
+      type: ReviewItemType.new_application,
+      confidence: 0.92,
+      company: indeedCompany ?? "Unknown Company",
+      role: role ?? null,
+      location,
+      suggestedStatus: ApplicationStatus.Applied,
+      taskTitle: null,
+      reason: "Indeed application pattern detected",
+    };
+  }
+
+  const isLinkedInSender = senderLower.includes("linkedin.com");
   const linkedInApplyMatch = sourceText.match(
     /your application was sent to\s+([^\n\r.,;:!?]+?)(?:[.,;:!?]|\n|\r|$)/i,
   );
@@ -313,19 +411,20 @@ export function classifyGmailMessage(input: ClassifierInput): ClassificationResu
       confidence: 0.9,
       company: linkedInApplyMatch[1].trim(),
       role: role ?? null,
+      location,
       suggestedStatus: ApplicationStatus.Applied,
       taskTitle: null,
       reason: "LinkedIn Easy Apply application-sent pattern detected",
     };
   }
 
-  // Rejection/status update should override application-confirmation language.
   if (includesAny(merged, rejectionPhrases)) {
     return {
       type: ReviewItemType.status_update,
       confidence: 0.9,
       company,
       role,
+      location,
       suggestedStatus: ApplicationStatus.Rejected,
       taskTitle: null,
       reason: "Rejection phrase detected",
@@ -338,6 +437,7 @@ export function classifyGmailMessage(input: ClassifierInput): ClassificationResu
       confidence: 0.9,
       company,
       role,
+      location,
       suggestedStatus: ApplicationStatus.Applied,
       taskTitle: null,
       reason: "Application confirmation phrase detected",
@@ -350,6 +450,7 @@ export function classifyGmailMessage(input: ClassifierInput): ClassificationResu
       confidence: 0.88,
       company,
       role,
+      location,
       suggestedStatus: ApplicationStatus.Offer,
       taskTitle: null,
       reason: "Offer phrase detected",
@@ -362,6 +463,7 @@ export function classifyGmailMessage(input: ClassifierInput): ClassificationResu
       confidence: 0.84,
       company,
       role,
+      location,
       suggestedStatus: ApplicationStatus.Interview,
       taskTitle: null,
       reason: "Interview/update phrase detected",
@@ -374,6 +476,7 @@ export function classifyGmailMessage(input: ClassifierInput): ClassificationResu
       confidence: 0.82,
       company,
       role,
+      location,
       suggestedStatus: null,
       taskTitle: chooseTaskTitle(merged),
       reason: "Action-required phrase detected",
@@ -385,6 +488,7 @@ export function classifyGmailMessage(input: ClassifierInput): ClassificationResu
     confidence: 0.5,
     company,
     role,
+    location,
     suggestedStatus: null,
     taskTitle: null,
     reason: "Potentially job-related but low confidence",
@@ -392,7 +496,7 @@ export function classifyGmailMessage(input: ClassifierInput): ClassificationResu
 }
 
 export const gmailScanQuery =
-  'newer_than:7d ("thank you for applying" OR "application received" OR "application submitted" OR "we received your application" OR "your application has been submitted" OR "thank you for your interest" OR "unfortunately" OR "we regret to inform you" OR "not selected" OR "next steps" OR "interview" OR "schedule a call" OR "task awaiting you" OR "action required" OR "complete your assessment" OR "candidate portal" OR "coding challenge")';
+  'newer_than:7d ("thank you for applying" OR "application received" OR "application submitted" OR "we received your application" OR "your application has been submitted" OR "thank you for your interest" OR "we have received your resume" OR "we\'ve received your resume" OR "your resume has been received" OR "resume has been received" OR "received your resume" OR "reviewed by our recruiting team" OR "interest in employment at" OR "unfortunately" OR "we regret to inform you" OR "not selected" OR "next steps" OR "interview" OR "schedule a call" OR "task awaiting you" OR "action required" OR "complete your assessment" OR "candidate portal" OR "coding challenge")';
 
 /*
 Inline classifier examples (no test harness currently configured):
@@ -430,4 +534,13 @@ Inline classifier examples (no test harness currently configured):
 9) Sender: Capital One <capitalone@notification.capitalone.com>
    Subject/snippet: "See your latest review from CreditWise"
    Expected: unknown_job_related with very low confidence (~0.1), so scan skips review-item creation.
+
+10) Sender: Indeed Apply <indeedapply@indeed.com>
+    Subject/snippet: "Indeed Application: Data Engineer ... Application submitted ... KUBRA - Tempe, AZ ... The following items were sent to KUBRA."
+    Expected: type=new_application, company="KUBRA", role="Data Engineer", location="Tempe, AZ", suggestedStatus=Applied.
+    If company cannot be extracted confidently, keep it as "Unknown Company" (never "Indeed").
+
+11) Sender: Rolfson Oil <noreply@applytojob.com>
+    Subject/snippet: "Saad, we've received your resume ... interest in employment at Rolfson Oil ... reviewed by our recruiting team"
+    Expected: type=new_application, company="Rolfson Oil", role=null, suggestedStatus=Applied, confidence around 0.9.
 */
