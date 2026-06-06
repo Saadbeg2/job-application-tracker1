@@ -1,4 +1,5 @@
 import { taskStatuses } from "@/lib/constants";
+import { ensureFollowUpTasks } from "@/lib/followUpTasks";
 import { TaskStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
@@ -11,6 +12,8 @@ function validateStatus(status: string | undefined) {
 }
 
 export async function GET() {
+  await ensureFollowUpTasks(prisma);
+
   const tasks = await prisma.task.findMany({
     orderBy: [{ status: "asc" }, { createdAt: "desc" }],
   });

@@ -1,4 +1,5 @@
 import { taskStatuses } from "@/lib/constants";
+import { isFollowUpTask } from "@/lib/followUpTasks";
 import { TaskStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
@@ -49,19 +50,56 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
     return NextResponse.json({ error: "Invalid status" }, { status: 400 });
   }
 
+  const followedUpWith = String(body.followedUpWith ?? "").trim();
+  const followUpNotes = String(body.followUpNotes ?? "").trim();
+
   try {
-    const task = await prisma.task.update({
-      where: { id },
-      data: {
-        applicationId: body.applicationId ? Number(body.applicationId) : null,
-        company: String(body.company),
-        role: body.role || null,
-        title: String(body.title),
-        status,
-        dueDate: body.dueDate ? new Date(body.dueDate) : null,
-        sourceEmailSubject: String(body.sourceEmailSubject),
-        notes: body.notes || null,
-      },
+    const existing = await prisma.task.findUnique({ where: { id } });
+    if (!existing) {
+      return NextResponse.json({ error: "Task not found" }, { status: 404 });
+    }
+
+    const becameCompleted = existing.status !== TaskStatus.completed && status === TaskStatus.completed;
+    const isLinkedFollowUpCompletion =
+      becameCompleted &&
+      Boolean(existing.applicationId) &&
+      isFollowUpTask(existing.sourceEmailSubject);
+
+    if (isLinkedFollowUpCompletion && !followedUpWith) {
+      return NextResponse.json(
+        { error: "Who you followed up with is required to complete this follow-up task." },
+        { status: 400 },
+      );
+    }
+
+    const task = await prisma.$transaction(async (tx) => {
+      const updatedTask = await tx.task.update({
+        where: { id },
+        data: {
+          applicationId: body.applicationId ? Number(body.applicationId) : null,
+          company: String(body.company),
+          role: body.role || null,
+          title: String(body.title),
+          status,
+          dueDate: body.dueDate ? new Date(body.dueDate) : null,
+          sourceEmailSubject: String(body.sourceEmailSubject),
+          notes: body.notes || null,
+        },
+      });
+
+      if (becameCompleted && updatedTask.applicationId && isFollowUpTask(updatedTask.sourceEmailSubject)) {
+        await tx.application.update({
+          where: { id: updatedTask.applicationId },
+          data: {
+            lastFollowedUpAt: new Date(),
+            lastFollowedUpWith: followedUpWith,
+            lastFollowUpNotes: followUpNotes || null,
+            followUpCount: { increment: 1 },
+          },
+        });
+      }
+
+      return updatedTask;
     });
 
     return NextResponse.json(task);

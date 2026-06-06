@@ -1,9 +1,12 @@
 import { countApplicationsForTodayAndWeek } from "@/lib/analytics";
+import { ensureFollowUpTasks } from "@/lib/followUpTasks";
 import { ReviewItemType, ReviewStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
 export async function GET() {
+  await ensureFollowUpTasks(prisma);
+
   const [applications, totalApplications, pendingTasks, pendingReviewItems, pendingStatusUpdates, pendingReviewTasks, lastScan, recentApplications] =
     await Promise.all([
       prisma.application.findMany({

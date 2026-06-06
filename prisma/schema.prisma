@@ -40,6 +40,10 @@ model Application {
   company        String
   role           String
   dateApplied    DateTime
+  lastFollowedUpAt DateTime?
+  lastFollowedUpWith String?
+  lastFollowUpNotes String?
+  followUpCount  Int               @default(0)
   status         ApplicationStatus @default(Applied)
   source         String?
   jobLink        String?

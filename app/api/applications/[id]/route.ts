@@ -1,4 +1,5 @@
 import { applicationStatuses } from "@/lib/constants";
+import { parseDateInputToStoredDateInChicago } from "@/lib/dates";
 import { ApplicationStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
@@ -49,13 +50,20 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
     return NextResponse.json({ error: "Invalid status" }, { status: 400 });
   }
 
+  let dateApplied: Date;
+  try {
+    dateApplied = parseDateInputToStoredDateInChicago(String(body.dateApplied));
+  } catch {
+    return NextResponse.json({ error: "Invalid dateApplied" }, { status: 400 });
+  }
+
   try {
     const application = await prisma.application.update({
       where: { id },
       data: {
         company: String(body.company),
         role: String(body.role),
-        dateApplied: new Date(body.dateApplied),
+        dateApplied,
         status,
         source: body.source || null,
         jobLink: body.jobLink?.trim() || null,

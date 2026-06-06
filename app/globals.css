@@ -336,6 +336,20 @@ tbody tr:last-child td {
   gap: 1rem;
 }
 
+.compact-stack {
+  gap: 0.45rem;
+}
+
+.inline-form {
+  display: grid;
+  gap: 0.65rem;
+  min-width: min(420px, 70vw);
+  padding: 0.75rem;
+  border: 1px solid var(--border-default);
+  border-radius: 0.85rem;
+  background: rgba(255, 255, 255, 0.04);
+}
+
 .muted {
   color: var(--foreground-muted);
 }
@@ -356,6 +370,32 @@ tbody tr:last-child td {
   font-size: 0.75rem;
   font-weight: 560;
   padding: 0.28rem 0.55rem;
+}
+
+.completed-tasks {
+  opacity: 0.82;
+}
+
+.completed-tasks tbody tr:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.section-toggle {
+  width: 100%;
+  background: transparent;
+  border: 1px solid var(--border-default);
+  color: var(--foreground);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  border-radius: 0.8rem;
+  padding: 0.62rem 0.78rem;
+}
+
+.section-toggle:hover {
+  border-color: var(--border-hover);
+  background: var(--surface);
 }
 
 .page-header {

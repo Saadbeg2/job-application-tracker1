@@ -43,3 +43,10 @@ next-env.d.ts
 
 /app/generated/prisma
 prisma/dev.db
+prisma/dev.db-journal
+*.db
+*.db-journal
+*.sqlite
+*.sqlite-journal
+*.sqlite3
+*.sqlite3-journal

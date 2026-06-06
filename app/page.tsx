@@ -1,8 +1,11 @@
 import { countApplicationsForTodayAndWeek } from "@/lib/analytics";
+import { ensureFollowUpTasks } from "@/lib/followUpTasks";
 import { ReviewItemType, ReviewStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 export default async function DashboardPage() {
+  await ensureFollowUpTasks(prisma);
+
   const [applications, totalApplications, pendingTasks, pendingReviewItems, pendingStatusUpdates, pendingReviewTasks, lastScan, recentApplications] =
     await Promise.all([
       prisma.application.findMany({

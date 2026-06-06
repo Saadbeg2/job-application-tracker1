@@ -1,5 +1,6 @@
-import { Application, PrismaClient, Task } from "@prisma/client";
+import { Application, ApplicationStatus, PrismaClient, Task, TaskStatus } from "@prisma/client";
 import { GOOGLE_SHEETS_SCOPE, getValidAccessToken, hasSheetsScope } from "@/lib/gmail";
+import { toChicagoDateKey } from "@/lib/dates";
 
 const SHEETS_API = "https://sheets.googleapis.com/v4/spreadsheets";
 const DEFAULT_TITLE = process.env.GOOGLE_SHEETS_DEFAULT_TITLE || "Job Application Tracker";
@@ -17,6 +18,11 @@ const APPLICATION_HEADERS = [
   "Location",
   "Referral",
   "Notes",
+  "Follow-Up Status",
+  "Last Followed Up",
+  "Followed Up With",
+  "Follow-Up Count",
+  "Follow-Up Notes",
   "Created At",
   "Last Updated",
 ];
@@ -44,8 +50,25 @@ function formatDateTime(date: Date | null | undefined) {
   return date.toISOString();
 }
 
+function formatChicagoDateOnly(date: Date | null | undefined) {
+  if (!date) return "";
+  return toChicagoDateKey(date);
+}
+
 function cleanCell(value: string | null | undefined) {
   return value ?? "";
+}
+
+function isClosedApplicationStatus(status: ApplicationStatus) {
+  return status === ApplicationStatus.Rejected || status === ApplicationStatus.Offer || status === ApplicationStatus.Withdrawn;
+}
+
+function followUpStatus(application: Application, pendingFollowUpApplicationIds: Set<number>) {
+  if (isClosedApplicationStatus(application.status)) return "Closed";
+  if (application.followUpCount >= 2) return "No more follow-ups";
+  if (pendingFollowUpApplicationIds.has(application.id)) return "Follow-up due";
+  if (application.lastFollowedUpAt) return "Follow-up completed";
+  return "Not due";
 }
 
 export function parseSpreadsheetInput(value: string) {
@@ -244,7 +267,7 @@ async function clearAndWriteTab(
   });
 }
 
-function applicationRows(applications: Application[]) {
+function applicationRows(applications: Application[], pendingFollowUpApplicationIds: Set<number>) {
   return applications.map((a) => [
     formatDateOnly(a.dateApplied),
     cleanCell(a.company),
@@ -256,6 +279,11 @@ function applicationRows(applications: Application[]) {
     cleanCell(a.location),
     cleanCell(a.referral),
     cleanCell(a.notes),
+    followUpStatus(a, pendingFollowUpApplicationIds),
+    formatChicagoDateOnly(a.lastFollowedUpAt),
+    cleanCell(a.lastFollowedUpWith),
+    String(a.followUpCount),
+    cleanCell(a.lastFollowUpNotes),
     formatDateTime(a.createdAt),
     formatDateTime(a.updatedAt),
   ]);
@@ -292,6 +320,18 @@ export async function syncSpreadsheet(prisma: PrismaClient) {
     }),
   ]);
 
+  const pendingFollowUpApplicationIds = new Set(
+    tasks
+      .filter(
+        (task) =>
+          task.applicationId !== null &&
+          task.sourceEmailSubject === "Auto Follow-Up" &&
+          task.status === TaskStatus.pending,
+      )
+      .map((task) => task.applicationId)
+      .filter((id): id is number => id !== null),
+  );
+
   try {
     await ensureSheetTabs(accessToken, syncConfig.spreadsheetId, [
       syncConfig.applicationsSheetName,
@@ -303,7 +343,7 @@ export async function syncSpreadsheet(prisma: PrismaClient) {
       syncConfig.spreadsheetId,
       syncConfig.applicationsSheetName,
       APPLICATION_HEADERS,
-      applicationRows(applications),
+      applicationRows(applications, pendingFollowUpApplicationIds),
     );
 
     await clearAndWriteTab(
