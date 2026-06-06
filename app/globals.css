@@ -98,15 +98,51 @@ nav a {
   transition: color 220ms ease, background-color 220ms ease, border-color 220ms ease, transform 220ms ease;
 }
 
-nav a:hover {
+nav a:hover,
+.nav-button:hover {
   color: var(--foreground);
   background: var(--surface);
   border-color: var(--border-hover);
   transform: translateY(-1px);
 }
 
+.sign-out-form {
+  display: inline-flex;
+}
+
+.nav-button {
+  color: var(--foreground-muted);
+  background: transparent;
+  text-decoration: none;
+  font-size: 0.9rem;
+  font-weight: 560;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  padding: 0.45rem 0.72rem;
+  transition: color 220ms ease, background-color 220ms ease, border-color 220ms ease, transform 220ms ease;
+}
+
 .page {
   padding: 1.35rem 0 2rem;
+}
+
+.login-page {
+  min-height: calc(100vh - 86px);
+  display: grid;
+  place-items: center;
+  padding: 2rem 0;
+}
+
+.login-card {
+  width: min(420px, 100%);
+}
+
+.login-card h2 {
+  font-size: 1.35rem;
+}
+
+.login-button {
+  justify-self: start;
 }
 
 .card,
@@ -444,7 +480,8 @@ a:focus-visible {
     width: 100%;
   }
 
-  nav a {
+  nav a,
+  .nav-button {
     font-size: 0.84rem;
   }
 

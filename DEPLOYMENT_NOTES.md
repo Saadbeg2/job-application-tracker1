@@ -2,7 +2,7 @@
 
 This repo is being prepared for GitHub, Vercel, and Neon, but it is not ready for public deployment yet.
 
-Do not deploy this app publicly until authentication and admin-only access control are implemented across pages and API routes.
+Do not deploy this app publicly until admin auth environment variables are configured, the database plan is finalized, and production callbacks/schedulers are reviewed.
 
 ## Current State
 
@@ -11,7 +11,7 @@ Do not deploy this app publicly until authentication and admin-only access contr
 - Local database is expected at `prisma/dev.db` when `DATABASE_URL` uses `file:./dev.db`.
 - Gmail OAuth/API, Google Sheets API, and SMTP reporting all depend on environment variables.
 - Daily reports are exposed through an API route and require an external scheduler or Vercel Cron configuration to run automatically.
-- There is no app-level auth or access control yet.
+- App-level admin-only Google login protects app pages and private API routes.
 
 ## Local Setup
 
@@ -29,6 +29,8 @@ Do not deploy this app publicly until authentication and admin-only access contr
    DATABASE_URL="file:./dev.db"
    GOOGLE_REDIRECT_URI="http://localhost:3000/api/gmail/callback"
    APP_BASE_URL="http://localhost:3000"
+   AUTH_URL="http://localhost:3000"
+   ADMIN_EMAIL="your-email@example.com"
    ```
 
 4. Apply local Prisma migrations and generate the client:
@@ -84,7 +86,7 @@ Do not deploy this app publicly until authentication and admin-only access contr
 
 Google OAuth redirect URIs must exactly match the deployed callback URL.
 
-For local development:
+For local Gmail/Sheets connection:
 
 ```text
 http://localhost:3000/api/gmail/callback
@@ -96,10 +98,23 @@ For Vercel production later:
 https://<your-vercel-domain>/api/gmail/callback
 ```
 
+For local app login:
+
+```text
+http://localhost:3000/api/auth/callback
+```
+
+For Vercel app login later:
+
+```text
+https://<your-vercel-domain>/api/auth/callback
+```
+
 Update both:
 
 - Google Cloud Console OAuth client redirect URI.
 - Vercel `GOOGLE_REDIRECT_URI` environment variable.
+- Vercel `AUTH_URL` environment variable.
 
 The app currently requests Gmail read-only and Google Sheets scopes during the same Google OAuth flow.
 
@@ -113,6 +128,14 @@ The app currently requests Gmail read-only and Google Sheets scopes during the s
 
 - `APP_BASE_URL`
 - `GOOGLE_REDIRECT_URI`
+
+### Admin app authentication
+
+- `AUTH_SECRET`
+- `AUTH_URL`
+- `GOOGLE_AUTH_CLIENT_ID`
+- `GOOGLE_AUTH_CLIENT_SECRET`
+- `ADMIN_EMAIL`
 
 ### Google OAuth / Gmail
 
@@ -142,21 +165,15 @@ The app currently requests Gmail read-only and Google Sheets scopes during the s
 - `ANALYTICS_TODAY_OVERRIDE`
 - `ANALYTICS_DEBUG`
 
-### Future auth / access control
-
-- `AUTH_SECRET`
-- `ALLOWED_ADMIN_EMAILS`
-
 ## Deployment Blockers
 
 - `prisma/schema.prisma` currently uses `provider = "sqlite"`.
 - Existing migrations are SQLite migrations; they are not ready to apply directly to Neon Postgres.
 - Local SQLite files cannot be used reliably on Vercel because serverless filesystems are ephemeral.
-- There is no authentication or access control yet.
 - Gmail OAuth callback URL must be changed to the production Vercel URL before production OAuth use.
+- Auth Google OAuth callback URL must be added for production: `https://<your-vercel-domain>/api/auth/callback`.
 - Daily reports will not run automatically unless Vercel Cron or another scheduler is configured.
 - Gmail access tokens and refresh tokens are stored in the database in local MVP style; production should consider encryption at rest.
-- Current write APIs, Gmail scan, Settings, Review Queue, Google Sheets sync, Demo routes, and report routes need authorization before public use.
 
 ## Prisma / Postgres Readiness Plan
 
@@ -206,17 +223,15 @@ Schema notes:
 - The main migration issue is the existing SQLite migration history and `prisma/migrations/migration_lock.toml`, which currently records `provider = "sqlite"`.
 - No obvious SQLite-only field defaults were found in `prisma/schema.prisma`, but generated SQL migrations must still be reviewed before production.
 
-## Auth / Access-Control Readiness Plan
+## Auth / Access-Control Notes
 
-Minimum safe first deployment plan:
-
-- Add Google login.
-- Add an `ALLOWED_ADMIN_EMAILS` environment variable.
-- Allow access only when the signed-in Google account email is in `ALLOWED_ADMIN_EMAILS`.
-- Block unauthorized users from all app pages.
-- Block unauthorized users from all API routes.
-- Explicitly protect Gmail connect/callback/disconnect/scan/status routes.
-- Explicitly protect Settings, Review Queue, Google Sheets sync, report-send routes, Demo routes, Job Discovery routes, application write APIs, task write APIs, and review item approval/ignore APIs.
+- The app uses a minimal Google OAuth login for admin-only access.
+- `ADMIN_EMAIL` is the only email allowed to create a valid app session.
+- App sessions are signed with `AUTH_SECRET` and stored in an HTTP-only cookie.
+- The auth login flow uses `GOOGLE_AUTH_CLIENT_ID` and `GOOGLE_AUTH_CLIENT_SECRET`.
+- If `GOOGLE_AUTH_CLIENT_ID` / `GOOGLE_AUTH_CLIENT_SECRET` are not set, auth falls back to the existing `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`, but separate OAuth credentials are safer because app login and Gmail/Sheets access use different callback URLs and scopes.
+- Private pages and APIs are protected by `proxy.ts`.
+- Static assets and `/api/auth/*` remain public.
 - Add an optional viewer role later if read-only sharing becomes useful.
 
 ## Secret Safety Notes

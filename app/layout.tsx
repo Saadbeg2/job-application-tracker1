@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { getAdminSession } from "@/lib/authServer";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -7,11 +8,13 @@ export const metadata: Metadata = {
   description: "Track applications and follow-up tasks in one place",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const session = await getAdminSession();
+
   return (
     <html lang="en">
       <body>
@@ -26,6 +29,13 @@ export default function RootLayout({
               <Link href="/settings" aria-label="Settings" title="Settings">
                 <span aria-hidden="true">⚙</span>
               </Link>
+              {session ? (
+                <form action="/api/auth/logout" method="post" className="sign-out-form">
+                  <button type="submit" className="nav-button">
+                    Sign out
+                  </button>
+                </form>
+              ) : null}
             </nav>
           </div>
         </header>
