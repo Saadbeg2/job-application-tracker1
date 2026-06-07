@@ -7,8 +7,8 @@ Do not deploy this app publicly until admin auth environment variables are confi
 ## Current State
 
 - Next.js + TypeScript app.
-- Prisma currently uses SQLite through `prisma/schema.prisma`.
-- Local database is expected at `prisma/dev.db` when `DATABASE_URL` uses `file:./dev.db`.
+- Prisma uses Postgres through `prisma/schema.prisma`.
+- Neon Postgres should be used for production `DATABASE_URL`.
 - Gmail OAuth/API, Google Sheets API, and SMTP reporting all depend on environment variables.
 - Daily reports are exposed through an API route and require an external scheduler or Vercel Cron configuration to run automatically.
 - App-level admin-only Google login protects app pages and private API routes.
@@ -23,10 +23,10 @@ Do not deploy this app publicly until admin auth environment variables are confi
 
 2. Create a local `.env` from `.env.example` and fill in local values. Do not commit `.env`.
 
-3. For local SQLite development, set:
+3. For local Postgres development, set:
 
    ```env
-   DATABASE_URL="file:./dev.db"
+   DATABASE_URL="postgresql://<user>:<password>@<host>/<database>?sslmode=require"
    GOOGLE_REDIRECT_URI="http://localhost:3000/api/gmail/callback"
    APP_BASE_URL="http://localhost:3000"
    AUTH_URL="http://localhost:3000"
@@ -65,8 +65,8 @@ Do not deploy this app publicly until admin auth environment variables are confi
 - Create a production database and role.
 - Copy the pooled or direct Postgres connection string for Vercel.
 - Store it in Vercel as `DATABASE_URL`.
-- Do not use the local SQLite `file:./dev.db` URL in Vercel.
-- Do not migrate to Postgres until the Prisma provider and migrations have been intentionally updated.
+- Do not use the old local SQLite `file:./dev.db` URL in Vercel.
+- Apply the fresh Postgres migration to an empty Neon database first.
 
 ## Vercel Setup Checklist
 
@@ -167,9 +167,8 @@ The app currently requests Gmail read-only and Google Sheets scopes during the s
 
 ## Deployment Blockers
 
-- `prisma/schema.prisma` currently uses `provider = "sqlite"`.
-- Existing migrations are SQLite migrations; they are not ready to apply directly to Neon Postgres.
-- Local SQLite files cannot be used reliably on Vercel because serverless filesystems are ephemeral.
+- Old SQLite migrations are archived and should not be applied to Neon Postgres.
+- Local SQLite files cannot be used on Vercel because serverless filesystems are ephemeral.
 - Gmail OAuth callback URL must be changed to the production Vercel URL before production OAuth use.
 - Auth Google OAuth callback URL must be added for production: `https://<your-vercel-domain>/api/auth/callback`.
 - Daily reports will not run automatically unless Vercel Cron or another scheduler is configured.
@@ -177,51 +176,37 @@ The app currently requests Gmail read-only and Google Sheets scopes during the s
 
 ## Prisma / Postgres Readiness Plan
 
-Do not migrate yet.
+Prisma is configured for Postgres. The active migration path is intended for a fresh Neon database.
 
-When ready to move from SQLite to Neon Postgres:
-
-1. Update `prisma/schema.prisma`:
-
-   ```prisma
-   datasource db {
-     provider = "postgresql"
-     url      = env("DATABASE_URL")
-   }
-   ```
-
-2. Update production `DATABASE_URL` to a Neon Postgres URL:
+1. Set `DATABASE_URL` to a Neon Postgres URL:
 
    ```text
    postgresql://<user>:<password>@<host>/<database>?sslmode=require
    ```
 
-3. Regenerate migrations for Postgres instead of applying the current SQLite migration SQL to Neon directly.
-
-4. Run locally against a disposable Postgres database first:
+2. Generate Prisma Client:
 
    ```bash
-   npm run db:generate
-   npx prisma migrate dev --name init_postgres
+   npx prisma generate
    ```
 
-5. Apply production migrations after review:
+3. Apply the fresh Postgres migration to an empty Neon database:
 
    ```bash
    npx prisma migrate deploy
    ```
 
-6. Generate Prisma Client during deployment:
+4. For local development with a disposable Postgres database, use:
 
    ```bash
-   npm run db:generate
+   npx prisma migrate dev
    ```
 
 Schema notes:
 
 - The current Prisma models use common Prisma field types, enums, `@default(now())`, `@updatedAt`, indexes, and relations that are generally Postgres-compatible.
-- The main migration issue is the existing SQLite migration history and `prisma/migrations/migration_lock.toml`, which currently records `provider = "sqlite"`.
-- No obvious SQLite-only field defaults were found in `prisma/schema.prisma`, but generated SQL migrations must still be reviewed before production.
+- The old SQLite migration history is preserved outside the active Prisma migration path for reference.
+- No obvious SQLite-only field defaults were found in `prisma/schema.prisma`.
 
 ## Auth / Access-Control Notes
 
