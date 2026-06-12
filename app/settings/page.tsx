@@ -33,30 +33,6 @@ type SheetsStatus = {
   lastSyncError?: string | null;
 };
 
-type ReportRecipient = {
-  id: number;
-  name: string;
-  email: string;
-  timezone: "Asia/Karachi" | "America/Chicago" | "Europe/London";
-  active: boolean;
-};
-
-type ReportSendLog = {
-  id: number;
-  reportDate: string;
-  timezone: string;
-  sentAt: string;
-  status: "sent" | "failed";
-  errorMessage: string | null;
-  recipient: {
-    name: string;
-    email: string;
-    timezone: string;
-  };
-};
-
-const timezoneOptions = ["Asia/Karachi", "America/Chicago", "Europe/London"] as const;
-
 async function readJsonSafe<T>(response: Response): Promise<T | null> {
   const text = await response.text();
   if (!text.trim()) return null;
@@ -71,25 +47,15 @@ export default function SettingsPage() {
   const [status, setStatus] = useState<GmailStatus | null>(null);
   const [history, setHistory] = useState<ScanHistory[]>([]);
   const [sheetsStatus, setSheetsStatus] = useState<SheetsStatus | null>(null);
-  const [recipients, setRecipients] = useState<ReportRecipient[]>([]);
-  const [sendLogs, setSendLogs] = useState<ReportSendLog[]>([]);
   const [message, setMessage] = useState("");
   const [sheetInput, setSheetInput] = useState("");
   const [loading, setLoading] = useState<string | null>(null);
-  const [recipientForm, setRecipientForm] = useState({
-    name: "",
-    email: "",
-    timezone: "America/Chicago" as ReportRecipient["timezone"],
-    active: true,
-  });
 
   async function load() {
-    const [statusRes, historyRes, sheetsRes, recipientsRes, logsRes] = await Promise.all([
+    const [statusRes, historyRes, sheetsRes] = await Promise.all([
       fetch("/api/gmail/status", { cache: "no-store" }),
       fetch("/api/gmail/scan-history", { cache: "no-store" }),
       fetch("/api/google-sheets/status", { cache: "no-store" }),
-      fetch("/api/report-recipients", { cache: "no-store" }),
-      fetch("/api/reports/send-log", { cache: "no-store" }),
     ]);
 
     if (statusRes.ok) {
@@ -104,25 +70,15 @@ export default function SettingsPage() {
       const data = await readJsonSafe<SheetsStatus>(sheetsRes);
       if (data) setSheetsStatus(data);
     }
-    if (recipientsRes.ok) {
-      const data = await readJsonSafe<ReportRecipient[]>(recipientsRes);
-      if (data) setRecipients(data);
-    }
-    if (logsRes.ok) {
-      const data = await readJsonSafe<ReportSendLog[]>(logsRes);
-      if (data) setSendLogs(data);
-    }
   }
 
   useEffect(() => {
     let active = true;
     void (async () => {
-      const [statusRes, historyRes, sheetsRes, recipientsRes, logsRes] = await Promise.all([
+      const [statusRes, historyRes, sheetsRes] = await Promise.all([
         fetch("/api/gmail/status", { cache: "no-store" }),
         fetch("/api/gmail/scan-history", { cache: "no-store" }),
         fetch("/api/google-sheets/status", { cache: "no-store" }),
-        fetch("/api/report-recipients", { cache: "no-store" }),
-        fetch("/api/reports/send-log", { cache: "no-store" }),
       ]);
       if (!active) return;
 
@@ -137,14 +93,6 @@ export default function SettingsPage() {
       if (sheetsRes.ok) {
         const data = await readJsonSafe<SheetsStatus>(sheetsRes);
         if (data) setSheetsStatus(data);
-      }
-      if (recipientsRes.ok) {
-        const data = await readJsonSafe<ReportRecipient[]>(recipientsRes);
-        if (data) setRecipients(data);
-      }
-      if (logsRes.ok) {
-        const data = await readJsonSafe<ReportSendLog[]>(logsRes);
-        if (data) setSendLogs(data);
       }
     })();
     return () => {
@@ -172,66 +120,11 @@ export default function SettingsPage() {
         setMessage("Google Sheet disconnected from app.");
       } else if (key === "disconnect-gmail") {
         setMessage("Google account disconnected.");
-      } else if (key === "send-test") {
-        setMessage("Test report request completed.");
-      } else if (key === "send-due") {
-        setMessage("Send-due request completed.");
       }
       await load();
     } finally {
       setLoading(null);
     }
-  }
-
-  async function addRecipient() {
-    setLoading("add-recipient");
-    setMessage("");
-    try {
-      const response = await fetch("/api/report-recipients", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(recipientForm),
-      });
-      const data = await readJsonSafe<{ error?: string }>(response);
-      if (!response.ok) {
-        setMessage(data?.error ?? "Failed to add recipient");
-        return;
-      }
-      setRecipientForm({ name: "", email: "", timezone: "America/Chicago", active: true });
-      setMessage("Recipient added.");
-      await load();
-    } finally {
-      setLoading(null);
-    }
-  }
-
-  async function updateRecipient(recipient: ReportRecipient, patch: Partial<ReportRecipient>) {
-    const response = await fetch(`/api/report-recipients/${recipient.id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...recipient, ...patch }),
-    });
-    if (!response.ok) {
-      const data = await readJsonSafe<{ error?: string }>(response);
-      setMessage(data?.error ?? "Failed to update recipient");
-      return;
-    }
-    await load();
-  }
-
-  async function deleteRecipient(id: number) {
-    const confirmed = window.confirm("Delete this recipient?");
-    if (!confirmed) return;
-
-    const response = await fetch(`/api/report-recipients/${id}`, { method: "DELETE" });
-    if (!response.ok) {
-      const data = await readJsonSafe<{ error?: string }>(response);
-      setMessage(data?.error ?? "Failed to delete recipient");
-      return;
-    }
-
-    setMessage("Recipient deleted.");
-    await load();
   }
 
   return (
@@ -325,145 +218,6 @@ export default function SettingsPage() {
           >
             Connect Existing Sheet
           </button>
-        </div>
-      </div>
-
-      <div className="card stack">
-        <h3>Daily Reports</h3>
-        <p className="muted">Reports send at 5:00 PM in each recipient’s local timezone.</p>
-
-        <div className="form-grid">
-          <label>
-            Name
-            <input value={recipientForm.name} onChange={(e) => setRecipientForm((p) => ({ ...p, name: e.target.value }))} />
-          </label>
-          <label>
-            Email
-            <input value={recipientForm.email} onChange={(e) => setRecipientForm((p) => ({ ...p, email: e.target.value }))} />
-          </label>
-          <label>
-            Timezone
-            <select
-              value={recipientForm.timezone}
-              onChange={(e) =>
-                setRecipientForm((p) => ({ ...p, timezone: e.target.value as ReportRecipient["timezone"] }))
-              }
-            >
-              {timezoneOptions.map((tz) => (
-                <option key={tz} value={tz}>
-                  {tz}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            Active
-            <select
-              value={recipientForm.active ? "yes" : "no"}
-              onChange={(e) => setRecipientForm((p) => ({ ...p, active: e.target.value === "yes" }))}
-            >
-              <option value="yes">Yes</option>
-              <option value="no">No</option>
-            </select>
-          </label>
-        </div>
-
-        <div className="actions">
-          <button className="primary" type="button" disabled={loading === "add-recipient"} onClick={() => void addRecipient()}>
-            Add Recipient
-          </button>
-          <button
-            className="secondary"
-            type="button"
-            disabled={loading === "send-test"}
-            onClick={() => void callAction("send-test", "/api/reports/send-test", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ all: true }) })}
-          >
-            Send Test Report (All Active)
-          </button>
-          <button
-            className="secondary"
-            type="button"
-            disabled={loading === "send-due"}
-            onClick={() => void callAction("send-due", "/api/reports/send-due?force=true", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ force: true }) })}
-          >
-            Send Due Now (Force)
-          </button>
-        </div>
-
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Timezone</th>
-                <th>Active</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recipients.map((recipient) => (
-                <tr key={recipient.id}>
-                  <td>{recipient.name}</td>
-                  <td>{recipient.email}</td>
-                  <td>{recipient.timezone}</td>
-                  <td>{recipient.active ? "Yes" : "No"}</td>
-                  <td>
-                    <div className="actions">
-                      <button
-                        className="secondary"
-                        type="button"
-                        onClick={() => void updateRecipient(recipient, { active: !recipient.active })}
-                      >
-                        {recipient.active ? "Deactivate" : "Activate"}
-                      </button>
-                      <button className="danger" type="button" onClick={() => void deleteRecipient(recipient.id)}>
-                        Delete
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {recipients.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="muted">No recipients yet.</td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
-        </div>
-
-        <h4>Recent Send Log</h4>
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>When</th>
-                <th>Recipient</th>
-                <th>Timezone</th>
-                <th>Report Date</th>
-                <th>Status</th>
-                <th>Error</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sendLogs.map((log) => (
-                <tr key={log.id}>
-                  <td>{new Date(log.sentAt).toLocaleString()}</td>
-                  <td>{log.recipient.email}</td>
-                  <td>{log.timezone}</td>
-                  <td>{log.reportDate}</td>
-                  <td>{log.status}</td>
-                  <td>{log.errorMessage ?? "-"}</td>
-                </tr>
-              ))}
-              {sendLogs.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="muted">No report sends yet.</td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
         </div>
       </div>
 
