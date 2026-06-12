@@ -29,6 +29,13 @@ function normalizeCompany(value: string) {
   return value.trim().toLowerCase();
 }
 
+function formatGuestInterviewDate(value: string | null) {
+  if (!value) return "Pending";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Pending";
+  return date.toLocaleString();
+}
+
 function GuestAccessScreen({ invalid }: { invalid: boolean }) {
   return (
     <section className="guest-access-page">
@@ -91,6 +98,54 @@ async function GuestDashboard() {
           <p className="stat-value">{summary.followUpDueCount}</p>
         </article>
       </div>
+
+      <section className="card stack">
+        <div>
+          <h3 className="section-title">Interview Pipeline</h3>
+          <p className="muted">Read-only view of active interview-stage applications.</p>
+        </div>
+
+        <div className="grid guest-stats">
+          <article className="guest-pipeline-metric">
+            <span className="muted">In interview process</span>
+            <strong>{summary.interviewPipeline.counts.inInterviewProcess}</strong>
+          </article>
+          <article className="guest-pipeline-metric">
+            <span className="muted">Scheduled interviews</span>
+            <strong>{summary.interviewPipeline.counts.scheduledInterviews}</strong>
+          </article>
+          <article className="guest-pipeline-metric">
+            <span className="muted">Pending / screening</span>
+            <strong>{summary.interviewPipeline.counts.pendingOrScreening}</strong>
+          </article>
+          <article className="guest-pipeline-metric">
+            <span className="muted">Completed / waiting</span>
+            <strong>{summary.interviewPipeline.counts.completedOrWaiting}</strong>
+          </article>
+        </div>
+
+        {summary.interviewPipeline.applications.length > 0 ? (
+          <div className="guest-interview-list">
+            {summary.interviewPipeline.applications.map((application) => (
+              <article key={application.id} className="guest-interview-item">
+                <div className="stack compact-stack">
+                  <strong>
+                    {application.company} — {application.role}
+                  </strong>
+                  <span className="badge">{application.interviewStatus || "Interview process"}</span>
+                </div>
+                <div className="stack compact-stack">
+                  <span className="muted">Date: {formatGuestInterviewDate(application.interviewDate)}</span>
+                  {application.interviewWith ? <span className="muted">With: {application.interviewWith}</span> : null}
+                  {application.interviewNotes ? <span>{application.interviewNotes}</span> : null}
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p className="muted">No applications are currently in the interview pipeline.</p>
+        )}
+      </section>
 
       <GuestCompanySuggestionForm />
 

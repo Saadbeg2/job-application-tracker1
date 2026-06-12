@@ -45,6 +45,10 @@ model Application {
   lastFollowUpNotes String?
   followUpCount  Int               @default(0)
   status         ApplicationStatus @default(Applied)
+  interviewStatus String?
+  interviewDate   DateTime?
+  interviewWith   String?
+  interviewNotes  String?
   source         String?
   jobLink        String?
   resumeUsed     String?

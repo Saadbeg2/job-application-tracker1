@@ -24,6 +24,10 @@ type Application = {
   lastFollowedUpWith: string | null;
   lastFollowUpNotes: string | null;
   followUpCount: number;
+  interviewStatus: string | null;
+  interviewDate: string | null;
+  interviewWith: string | null;
+  interviewNotes: string | null;
 };
 
 type FormState = {
@@ -38,7 +42,37 @@ type FormState = {
   jobDescription: string;
   location: string;
   referral: string;
+  interviewStatus: string;
+  interviewDate: string;
+  interviewWith: string;
+  interviewNotes: string;
 };
+
+const interviewStatusOptions = [
+  "Screening / assessment completed",
+  "Pending scheduling",
+  "Scheduled",
+  "Completed",
+  "Waiting for next steps",
+];
+
+function toDateTimeLocalValue(value: string | null) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+
+  const pad = (part: number) => String(part).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(
+    date.getHours(),
+  )}:${pad(date.getMinutes())}`;
+}
+
+function formatInterviewDate(value: string | null) {
+  if (!value) return "Pending";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Pending";
+  return date.toLocaleString();
+}
 
 function createInitialForm(): FormState {
   return {
@@ -53,6 +87,10 @@ function createInitialForm(): FormState {
     jobDescription: "",
     location: "",
     referral: "",
+    interviewStatus: "",
+    interviewDate: "",
+    interviewWith: "",
+    interviewNotes: "",
   };
 }
 
@@ -146,6 +184,10 @@ export default function ApplicationsPage() {
       jobDescription: application.jobDescription ?? "",
       location: application.location ?? "",
       referral: application.referral ?? "",
+      interviewStatus: application.interviewStatus ?? "",
+      interviewDate: toDateTimeLocalValue(application.interviewDate),
+      interviewWith: application.interviewWith ?? "",
+      interviewNotes: application.interviewNotes ?? "",
     });
     formContainerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     window.setTimeout(() => {
@@ -164,6 +206,9 @@ export default function ApplicationsPage() {
         application.location ?? "",
         application.jobLink ?? "",
         application.lastFollowedUpWith ?? "",
+        application.interviewStatus ?? "",
+        application.interviewWith ?? "",
+        application.interviewNotes ?? "",
       ]
         .join(" ")
         .toLowerCase();
@@ -197,13 +242,25 @@ export default function ApplicationsPage() {
     setOpenSections((prev) => ({ ...prev, [status]: !prev[status] }));
   }
 
-  function renderRows(rows: Application[]) {
+  function renderRows(rows: Application[], sectionStatus: (typeof applicationStatuses)[number]) {
+    const showInterviewDetails = sectionStatus === "Interview";
+
     return rows.map((application) => (
       <tr key={application.id}>
         <td>{application.company}</td>
         <td>{application.role}</td>
         <td>{application.dateApplied.slice(0, 10)}</td>
         <td>{application.status}</td>
+        {showInterviewDetails ? (
+          <td>
+            <div className="stack compact-stack">
+              <span className="badge">{application.interviewStatus || "Interview process"}</span>
+              <span className="muted">Date: {formatInterviewDate(application.interviewDate)}</span>
+              <span className="muted">With: {application.interviewWith || "—"}</span>
+              {application.interviewNotes ? <span>{application.interviewNotes}</span> : null}
+            </div>
+          </td>
+        ) : null}
         <td>
           {isApplicationStale({
             id: application.id,
@@ -358,6 +415,54 @@ export default function ApplicationsPage() {
               />
             </label>
           </div>
+          {form.status === "Interview" ? (
+            <div className="section-card stack">
+              <div className="stack compact-stack">
+                <h4>Interview Details</h4>
+                <p className="muted">Track scheduling and next-step context while keeping the main status as Interview.</p>
+              </div>
+              <div className="form-grid">
+                <label>
+                  Interview Status
+                  <select
+                    value={form.interviewStatus}
+                    onChange={(e) => updateField("interviewStatus", e.target.value)}
+                  >
+                    <option value="">Select interview status</option>
+                    {interviewStatusOptions.map((status) => (
+                      <option key={status} value={status}>
+                        {status}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Interview Date
+                  <input
+                    type="datetime-local"
+                    value={form.interviewDate}
+                    onChange={(e) => updateField("interviewDate", e.target.value)}
+                  />
+                </label>
+                <label>
+                  Interview With
+                  <input
+                    value={form.interviewWith}
+                    onChange={(e) => updateField("interviewWith", e.target.value)}
+                    placeholder="Recruiter, hiring manager, panel, etc."
+                  />
+                </label>
+                <label>
+                  Interview Notes
+                  <textarea
+                    value={form.interviewNotes}
+                    onChange={(e) => updateField("interviewNotes", e.target.value)}
+                    placeholder="Assessment completed, next steps, prep notes..."
+                  />
+                </label>
+              </div>
+            </div>
+          ) : null}
           {error ? <p className="error">{error}</p> : null}
           <div className="actions">
             <button className="primary" type="button" onClick={() => void saveApplication()}>
@@ -405,13 +510,14 @@ export default function ApplicationsPage() {
                       <th>Role</th>
                       <th>Date Applied</th>
                       <th>Status</th>
+                      {status === "Interview" ? <th>Interview Pipeline</th> : null}
                       <th>Alert</th>
                       <th>Follow-Up</th>
                       <th>Job Link</th>
                       <th>Actions</th>
                     </tr>
                   </thead>
-                  <tbody>{renderRows(rows)}</tbody>
+                  <tbody>{renderRows(rows, status)}</tbody>
                 </table>
               </div>
             ) : null}

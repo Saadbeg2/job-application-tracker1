@@ -4,6 +4,31 @@ import { ApplicationStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
+type ApplicationRow = {
+  id: number;
+  company: string;
+  role: string;
+  dateApplied: Date;
+  lastFollowedUpAt: Date | null;
+  lastFollowedUpWith: string | null;
+  lastFollowUpNotes: string | null;
+  followUpCount: number;
+  status: ApplicationStatus;
+  interviewStatus: string | null;
+  interviewDate: Date | null;
+  interviewWith: string | null;
+  interviewNotes: string | null;
+  source: string | null;
+  jobLink: string | null;
+  resumeUsed: string | null;
+  notes: string | null;
+  jobDescription: string | null;
+  location: string | null;
+  referral: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
 function parseId(id: string) {
   const parsed = Number(id);
   return Number.isInteger(parsed) ? parsed : null;
@@ -16,12 +41,77 @@ function validateStatus(status: string | undefined) {
     : null;
 }
 
+function optionalText(value: unknown) {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
+
+function parseOptionalDateTime(value: unknown) {
+  const text = optionalText(value);
+  if (!text) return null;
+
+  const parsed = new Date(text);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new Error("Invalid date");
+  }
+
+  return parsed;
+}
+
+async function selectApplicationById(id: number) {
+  const rows = await prisma.$queryRaw<ApplicationRow[]>`
+    SELECT
+      "id",
+      "company",
+      "role",
+      "dateApplied",
+      "lastFollowedUpAt",
+      "lastFollowedUpWith",
+      "lastFollowUpNotes",
+      "followUpCount",
+      "status",
+      "interviewStatus",
+      "interviewDate",
+      "interviewWith",
+      "interviewNotes",
+      "source",
+      "jobLink",
+      "resumeUsed",
+      "notes",
+      "jobDescription",
+      "location",
+      "referral",
+      "createdAt",
+      "updatedAt"
+    FROM "Application"
+    WHERE "id" = ${id}
+    LIMIT 1
+  `;
+
+  return rows[0] ?? null;
+}
+
+async function updateInterviewFields(id: number, body: Record<string, unknown>) {
+  const interviewDate = parseOptionalDateTime(body.interviewDate);
+
+  await prisma.$executeRaw`
+    UPDATE "Application"
+    SET
+      "interviewStatus" = ${optionalText(body.interviewStatus)},
+      "interviewDate" = ${interviewDate},
+      "interviewWith" = ${optionalText(body.interviewWith)},
+      "interviewNotes" = ${optionalText(body.interviewNotes)}
+    WHERE "id" = ${id}
+  `;
+}
+
 export async function GET(_: Request, context: { params: Promise<{ id: string }> }) {
   const params = await context.params;
   const id = parseId(params.id);
   if (!id) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
 
-  const application = await prisma.application.findUnique({ where: { id } });
+  const application = await selectApplicationById(id);
   if (!application) {
     return NextResponse.json({ error: "Application not found" }, { status: 404 });
   }
@@ -58,7 +148,13 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
   }
 
   try {
-    const application = await prisma.application.update({
+    parseOptionalDateTime(body.interviewDate);
+  } catch {
+    return NextResponse.json({ error: "Invalid interviewDate" }, { status: 400 });
+  }
+
+  try {
+    await prisma.application.update({
       where: { id },
       data: {
         company: String(body.company),
@@ -75,7 +171,9 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
       },
     });
 
-    return NextResponse.json(application);
+    await updateInterviewFields(id, body);
+
+    return NextResponse.json(await selectApplicationById(id));
   } catch {
     return NextResponse.json({ error: "Application not found" }, { status: 404 });
   }

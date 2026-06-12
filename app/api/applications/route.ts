@@ -4,6 +4,31 @@ import { ApplicationStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
+type ApplicationRow = {
+  id: number;
+  company: string;
+  role: string;
+  dateApplied: Date;
+  lastFollowedUpAt: Date | null;
+  lastFollowedUpWith: string | null;
+  lastFollowUpNotes: string | null;
+  followUpCount: number;
+  status: ApplicationStatus;
+  interviewStatus: string | null;
+  interviewDate: Date | null;
+  interviewWith: string | null;
+  interviewNotes: string | null;
+  source: string | null;
+  jobLink: string | null;
+  resumeUsed: string | null;
+  notes: string | null;
+  jobDescription: string | null;
+  location: string | null;
+  referral: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
 function validateStatus(status: string | undefined) {
   if (!status) return ApplicationStatus.Applied;
   return applicationStatuses.includes(status as (typeof applicationStatuses)[number])
@@ -11,10 +36,103 @@ function validateStatus(status: string | undefined) {
     : null;
 }
 
+function optionalText(value: unknown) {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+}
+
+function parseOptionalDateTime(value: unknown) {
+  const text = optionalText(value);
+  if (!text) return null;
+
+  const parsed = new Date(text);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new Error("Invalid date");
+  }
+
+  return parsed;
+}
+
+function selectApplications() {
+  return prisma.$queryRaw<ApplicationRow[]>`
+    SELECT
+      "id",
+      "company",
+      "role",
+      "dateApplied",
+      "lastFollowedUpAt",
+      "lastFollowedUpWith",
+      "lastFollowUpNotes",
+      "followUpCount",
+      "status",
+      "interviewStatus",
+      "interviewDate",
+      "interviewWith",
+      "interviewNotes",
+      "source",
+      "jobLink",
+      "resumeUsed",
+      "notes",
+      "jobDescription",
+      "location",
+      "referral",
+      "createdAt",
+      "updatedAt"
+    FROM "Application"
+    ORDER BY "dateApplied" DESC, "createdAt" DESC, "updatedAt" DESC
+  `;
+}
+
+async function selectApplicationById(id: number) {
+  const rows = await prisma.$queryRaw<ApplicationRow[]>`
+    SELECT
+      "id",
+      "company",
+      "role",
+      "dateApplied",
+      "lastFollowedUpAt",
+      "lastFollowedUpWith",
+      "lastFollowUpNotes",
+      "followUpCount",
+      "status",
+      "interviewStatus",
+      "interviewDate",
+      "interviewWith",
+      "interviewNotes",
+      "source",
+      "jobLink",
+      "resumeUsed",
+      "notes",
+      "jobDescription",
+      "location",
+      "referral",
+      "createdAt",
+      "updatedAt"
+    FROM "Application"
+    WHERE "id" = ${id}
+    LIMIT 1
+  `;
+
+  return rows[0] ?? null;
+}
+
+async function updateInterviewFields(id: number, body: Record<string, unknown>) {
+  const interviewDate = parseOptionalDateTime(body.interviewDate);
+
+  await prisma.$executeRaw`
+    UPDATE "Application"
+    SET
+      "interviewStatus" = ${optionalText(body.interviewStatus)},
+      "interviewDate" = ${interviewDate},
+      "interviewWith" = ${optionalText(body.interviewWith)},
+      "interviewNotes" = ${optionalText(body.interviewNotes)}
+    WHERE "id" = ${id}
+  `;
+}
+
 export async function GET() {
-  const applications = await prisma.application.findMany({
-    orderBy: [{ dateApplied: "desc" }, { createdAt: "desc" }, { updatedAt: "desc" }],
-  });
+  const applications = await selectApplications();
 
   return NextResponse.json(applications);
 }
@@ -43,6 +161,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid dateApplied" }, { status: 400 });
   }
 
+  try {
+    parseOptionalDateTime(body.interviewDate);
+  } catch {
+    return NextResponse.json({ error: "Invalid interviewDate" }, { status: 400 });
+  }
+
   const application = await prisma.application.create({
     data: {
       company: String(body.company),
@@ -59,5 +183,7 @@ export async function POST(request: Request) {
     },
   });
 
-  return NextResponse.json(application, { status: 201 });
+  await updateInterviewFields(application.id, body);
+
+  return NextResponse.json(await selectApplicationById(application.id), { status: 201 });
 }

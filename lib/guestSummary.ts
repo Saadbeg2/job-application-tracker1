@@ -3,6 +3,16 @@ import { dateOnlyKeyFromStoredDate, getTodayChicagoDateKey } from "@/lib/dates";
 import { getConfiguredGoogleSheetUrl } from "@/lib/dailyReport";
 import { ApplicationStatus, PrismaClient, TaskStatus } from "@prisma/client";
 
+type InterviewPipelineRow = {
+  id: number;
+  company: string;
+  role: string;
+  interviewStatus: string | null;
+  interviewDate: Date | null;
+  interviewWith: string | null;
+  interviewNotes: string | null;
+};
+
 function previousDateKey(dateKey: string) {
   const date = new Date(`${dateKey}T00:00:00.000Z`);
   date.setUTCDate(date.getUTCDate() - 1);
@@ -23,7 +33,7 @@ export async function getGuestDashboardSummary(prisma: PrismaClient) {
   const todayKey = getTodayChicagoDateKey();
   const yesterdayKey = previousDateKey(todayKey);
 
-  const [applications, statusGroups, activeTasksCount, followUpDueCount, syncConfig] = await Promise.all([
+  const [applications, statusGroups, activeTasksCount, followUpDueCount, syncConfig, interviewApplications] = await Promise.all([
     prisma.application.findMany({
       select: { id: true, company: true, dateApplied: true },
     }),
@@ -40,6 +50,19 @@ export async function getGuestDashboardSummary(prisma: PrismaClient) {
       },
     }),
     prisma.googleSheetSync.findFirst({ orderBy: { updatedAt: "desc" } }),
+    prisma.$queryRaw<InterviewPipelineRow[]>`
+      SELECT
+        "id",
+        "company",
+        "role",
+        "interviewStatus",
+        "interviewDate",
+        "interviewWith",
+        "interviewNotes"
+      FROM "Application"
+      WHERE "status" = 'Interview'
+      ORDER BY "interviewDate" ASC NULLS LAST, "updatedAt" DESC
+    `,
   ]);
 
   const { applicationsToday, applicationsThisWeek } = countApplicationsForTodayAndWeek(applications);
@@ -53,6 +76,31 @@ export async function getGuestDashboardSummary(prisma: PrismaClient) {
     (application) => dateOnlyKeyFromStoredDate(application.dateApplied) === yesterdayKey,
   ).length;
 
+  const completedOrWaitingStatuses = new Set(["Completed", "Waiting for next steps"]);
+  const interviewPipeline = {
+    counts: {
+      inInterviewProcess: interviewApplications.length,
+      scheduledInterviews: interviewApplications.filter((application) => application.interviewDate).length,
+      pendingOrScreening: interviewApplications.filter(
+        (application) =>
+          !application.interviewDate &&
+          !completedOrWaitingStatuses.has(application.interviewStatus ?? ""),
+      ).length,
+      completedOrWaiting: interviewApplications.filter((application) =>
+        completedOrWaitingStatuses.has(application.interviewStatus ?? ""),
+      ).length,
+    },
+    applications: interviewApplications.map((application) => ({
+      id: application.id,
+      company: application.company,
+      role: application.role,
+      interviewStatus: application.interviewStatus,
+      interviewDate: application.interviewDate?.toISOString() ?? null,
+      interviewWith: application.interviewWith,
+      interviewNotes: application.interviewNotes,
+    })),
+  };
+
   return {
     totalApplications: applications.length,
     applicationsToday,
@@ -61,6 +109,7 @@ export async function getGuestDashboardSummary(prisma: PrismaClient) {
     statusCounts,
     activeTasksCount,
     followUpDueCount,
+    interviewPipeline,
     googleSheetUrl: getConfiguredGoogleSheetUrl(syncConfig?.spreadsheetUrl ?? null),
   };
 }
