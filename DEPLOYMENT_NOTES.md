@@ -31,6 +31,7 @@ Do not deploy this app publicly until admin auth environment variables are confi
    APP_BASE_URL="http://localhost:3000"
    AUTH_URL="http://localhost:3000"
    ADMIN_EMAIL="your-email@example.com"
+   GUEST_ACCESS_CODE="shared-code-for-read-only-dashboard"
    ```
 
 4. Apply local Prisma migrations and generate the client:
@@ -136,6 +137,7 @@ The app currently requests Gmail read-only and Google Sheets scopes during the s
 - `GOOGLE_AUTH_CLIENT_ID`
 - `GOOGLE_AUTH_CLIENT_SECRET`
 - `ADMIN_EMAIL`
+- `GUEST_ACCESS_CODE`
 
 ### Google OAuth / Gmail
 
@@ -212,12 +214,14 @@ Schema notes:
 
 - The app uses a minimal Google OAuth login for admin-only access.
 - `ADMIN_EMAIL` is the only email allowed to create a valid app session.
+- `GUEST_ACCESS_CODE` enables the read-only guest dashboard. Store it only in local/Vercel environment variables and rotate it if shared too broadly.
 - App sessions are signed with `AUTH_SECRET` and stored in an HTTP-only cookie.
+- Guest sessions are also signed with `AUTH_SECRET`, stored in a separate HTTP-only cookie, and expire after about 7 days.
 - The auth login flow uses `GOOGLE_AUTH_CLIENT_ID` and `GOOGLE_AUTH_CLIENT_SECRET`.
 - If `GOOGLE_AUTH_CLIENT_ID` / `GOOGLE_AUTH_CLIENT_SECRET` are not set, auth falls back to the existing `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`, but separate OAuth credentials are safer because app login and Gmail/Sheets access use different callback URLs and scopes.
 - Private pages and APIs are protected by `proxy.ts`.
-- Static assets and `/api/auth/*` remain public.
-- Add an optional viewer role later if read-only sharing becomes useful.
+- Static assets, `/api/auth/*`, and the guest access-code endpoints remain public.
+- Guest users can access only `/` and the read-only guest summary API.
 
 ## Secret Safety Notes
 

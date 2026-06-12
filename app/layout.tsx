@@ -21,22 +21,22 @@ export default async function RootLayout({
         <header className="topbar">
           <div className="container topbar-inner">
             <h1>Job Accountability Tracker</h1>
-            <nav>
-              <Link href="/">Dashboard</Link>
-              <Link href="/applications">Applications</Link>
-              <Link href="/tasks">Tasks</Link>
-              <Link href="/review">Review Queue</Link>
-              <Link href="/settings" aria-label="Settings" title="Settings">
-                <span aria-hidden="true">⚙</span>
-              </Link>
-              {session ? (
+            {session ? (
+              <nav>
+                <Link href="/">Dashboard</Link>
+                <Link href="/applications">Applications</Link>
+                <Link href="/tasks">Tasks</Link>
+                <Link href="/review">Review Queue</Link>
+                <Link href="/settings" aria-label="Settings" title="Settings">
+                  <span aria-hidden="true">⚙</span>
+                </Link>
                 <form action="/api/auth/logout" method="post" className="sign-out-form">
                   <button type="submit" className="nav-button">
                     Sign out
                   </button>
                 </form>
-              ) : null}
-            </nav>
+              </nav>
+            ) : null}
           </div>
         </header>
         <main className="container">{children}</main>

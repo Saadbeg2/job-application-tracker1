@@ -1,11 +1,17 @@
 export const AUTH_SESSION_COOKIE = "jat_admin_session";
 export const AUTH_STATE_COOKIE = "jat_auth_state";
+export const GUEST_SESSION_COOKIE = "jat_guest_session";
 
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
 const STATE_TTL_SECONDS = 60 * 10;
 
 type AdminSession = {
   email: string;
+  exp: number;
+};
+
+type GuestSession = {
+  role: "guest";
   exp: number;
 };
 
@@ -58,6 +64,10 @@ export function adminEmail() {
   return process.env.ADMIN_EMAIL?.trim().toLowerCase() || "";
 }
 
+export function guestAccessCode() {
+  return process.env.GUEST_ACCESS_CODE?.trim() || "";
+}
+
 export function googleAuthClientId() {
   return process.env.GOOGLE_AUTH_CLIENT_ID || process.env.GOOGLE_CLIENT_ID || "";
 }
@@ -71,6 +81,10 @@ export function authCallbackUrl(requestUrl?: string) {
 }
 
 export function sessionCookieMaxAge() {
+  return SESSION_TTL_SECONDS;
+}
+
+export function guestSessionCookieMaxAge() {
   return SESSION_TTL_SECONDS;
 }
 
@@ -126,6 +140,18 @@ export async function createSessionCookieValue(email: string) {
   return signPayload(base64UrlEncode(JSON.stringify(session)), secret);
 }
 
+export async function createGuestSessionCookieValue() {
+  const secret = authSecret();
+  if (!secret) throw new Error("Missing AUTH_SECRET");
+
+  const session: GuestSession = {
+    role: "guest",
+    exp: Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS,
+  };
+
+  return signPayload(base64UrlEncode(JSON.stringify(session)), secret);
+}
+
 export async function readSessionCookieValue(value: string | undefined) {
   const secret = authSecret();
   if (!secret || !value) return null;
@@ -142,6 +168,29 @@ export async function readSessionCookieValue(value: string | undefined) {
   } catch {
     return null;
   }
+}
+
+export async function readGuestSessionCookieValue(value: string | undefined) {
+  const secret = authSecret();
+  if (!secret || !value) return null;
+
+  const payload = await verifySignedValue(value, secret);
+  if (!payload) return null;
+
+  try {
+    const session = JSON.parse(base64UrlDecode(payload)) as GuestSession;
+    if (session.role !== "guest" || !session.exp || session.exp < Math.floor(Date.now() / 1000)) return null;
+    return session;
+  } catch {
+    return null;
+  }
+}
+
+export function isValidGuestAccessCode(value: string) {
+  const expected = guestAccessCode();
+  const actual = value.trim();
+  if (!expected || !actual) return false;
+  return timingSafeEqual(actual, expected);
 }
 
 export async function createStateCookieValue(state: string) {

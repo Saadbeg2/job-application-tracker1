@@ -1,9 +1,126 @@
+import Link from "next/link";
 import { countApplicationsForTodayAndWeek } from "@/lib/analytics";
+import { getAdminSession, getGuestSession } from "@/lib/authServer";
 import { ensureFollowUpTasks } from "@/lib/followUpTasks";
-import { ReviewItemType, ReviewStatus } from "@prisma/client";
+import { getGuestDashboardSummary } from "@/lib/guestSummary";
 import { prisma } from "@/lib/prisma";
+import { ReviewItemType, ReviewStatus } from "@prisma/client";
 
-export default async function DashboardPage() {
+type HomePageProps = {
+  searchParams: Promise<{
+    guest?: string;
+  }>;
+};
+
+function AdminModeLink() {
+  return (
+    <div className="guest-top-actions">
+      <Link className="secondary" href="/login">
+        Admin Mode
+      </Link>
+    </div>
+  );
+}
+
+function GuestAccessScreen({ invalid }: { invalid: boolean }) {
+  return (
+    <section className="login-page">
+      <AdminModeLink />
+      <div className="card login-card stack">
+        <div className="stack compact-stack">
+          <h2>Guest Access</h2>
+          <p className="muted">Enter the shared access code to view a read-only tracker dashboard.</p>
+        </div>
+
+        {invalid ? <p className="error">That access code did not work. Please try again.</p> : null}
+
+        <form className="stack" action="/api/guest/login" method="post">
+          <label>
+            Access Code
+            <input name="accessCode" type="password" autoComplete="current-password" required />
+          </label>
+          <button className="primary login-button" type="submit">
+            View Dashboard
+          </button>
+        </form>
+      </div>
+    </section>
+  );
+}
+
+async function GuestDashboard() {
+  const summary = await getGuestDashboardSummary(prisma);
+  const statusEntries = Object.entries(summary.statusCounts);
+
+  return (
+    <section className="page stack">
+      <AdminModeLink />
+      <div className="page-header">
+        <h2 className="section-title">Guest Dashboard</h2>
+        <p className="muted">Read-only accountability snapshot. Editing and private integrations are admin-only.</p>
+      </div>
+
+      <div className="grid stats">
+        <article className="card">
+          <p className="muted">Applications today</p>
+          <p className="stat-value">{summary.applicationsToday}</p>
+        </article>
+        <article className="card">
+          <p className="muted">Applications yesterday</p>
+          <p className="stat-value">{summary.applicationsYesterday}</p>
+        </article>
+        <article className="card">
+          <p className="muted">Applications this week</p>
+          <p className="stat-value">{summary.applicationsThisWeek}</p>
+        </article>
+        <article className="card">
+          <p className="muted">Total applications</p>
+          <p className="stat-value">{summary.totalApplications}</p>
+        </article>
+        <article className="card">
+          <p className="muted">Active tasks</p>
+          <p className="stat-value">{summary.activeTasksCount}</p>
+        </article>
+        <article className="card">
+          <p className="muted">Follow-ups due</p>
+          <p className="stat-value">{summary.followUpDueCount}</p>
+        </article>
+      </div>
+
+      <div className="grid two-column-grid">
+        <section className="card stack">
+          <h3 className="section-title">Application Status</h3>
+          <div className="status-list">
+            {statusEntries.map(([status, count]) => (
+              <div key={status} className="status-row">
+                <span>{status}</span>
+                <span className="badge">{count}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="card stack">
+          <h3 className="section-title">Full Tracker</h3>
+          {summary.googleSheetUrl ? (
+            <a className="primary login-button" href={summary.googleSheetUrl} target="_blank" rel="noopener noreferrer">
+              Open Google Sheet
+            </a>
+          ) : (
+            <p className="muted">Google Sheet link not configured.</p>
+          )}
+          <form action="/api/guest/logout" method="post">
+            <button className="secondary" type="submit">
+              Sign out
+            </button>
+          </form>
+        </section>
+      </div>
+    </section>
+  );
+}
+
+async function AdminDashboard() {
   await ensureFollowUpTasks(prisma);
 
   const [applications, totalApplications, pendingTasks, pendingReviewItems, pendingStatusUpdates, pendingReviewTasks, lastScan, recentApplications] =
@@ -106,4 +223,17 @@ export default async function DashboardPage() {
       </div>
     </section>
   );
+}
+
+export default async function HomePage({ searchParams }: HomePageProps) {
+  const [adminSession, guestSession, params] = await Promise.all([
+    getAdminSession(),
+    getGuestSession(),
+    searchParams,
+  ]);
+
+  if (adminSession) return AdminDashboard();
+  if (guestSession) return GuestDashboard();
+
+  return <GuestAccessScreen invalid={params.guest === "invalid"} />;
 }

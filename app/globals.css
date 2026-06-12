@@ -145,6 +145,11 @@ nav a:hover,
   justify-self: start;
 }
 
+.guest-top-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .card,
 .section-card,
 .glass-card {
@@ -173,6 +178,10 @@ nav a:hover,
 
 .grid.stats {
   grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+
+.two-column-grid {
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
 }
 
 .grid.stats > .card,
@@ -432,6 +441,24 @@ tbody tr:last-child td {
 .section-toggle:hover {
   border-color: var(--border-hover);
   background: var(--surface);
+}
+
+.status-list {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.status-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+  padding: 0.55rem 0;
+  border-bottom: 1px solid var(--border-default);
+}
+
+.status-row:last-child {
+  border-bottom: none;
 }
 
 .page-header {
