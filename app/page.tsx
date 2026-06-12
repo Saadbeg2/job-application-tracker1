@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { countApplicationsForTodayAndWeek } from "@/lib/analytics";
 import { getAdminSession, getGuestSession } from "@/lib/authServer";
 import { ensureFollowUpTasks } from "@/lib/followUpTasks";
@@ -12,21 +11,10 @@ type HomePageProps = {
   }>;
 };
 
-function AdminModeLink() {
-  return (
-    <div className="guest-top-actions">
-      <Link className="secondary" href="/login">
-        Admin Mode
-      </Link>
-    </div>
-  );
-}
-
 function GuestAccessScreen({ invalid }: { invalid: boolean }) {
   return (
-    <section className="login-page">
-      <AdminModeLink />
-      <div className="card login-card stack">
+    <section className="guest-access-page">
+      <div className="card guest-access-card stack">
         <div className="stack compact-stack">
           <h2>Guest Access</h2>
           <p className="muted">Enter the shared access code to view a read-only tracker dashboard.</p>
@@ -39,7 +27,7 @@ function GuestAccessScreen({ invalid }: { invalid: boolean }) {
             Access Code
             <input name="accessCode" type="password" autoComplete="current-password" required />
           </label>
-          <button className="primary login-button" type="submit">
+          <button className="primary guest-button" type="submit">
             View Dashboard
           </button>
         </form>
@@ -53,35 +41,34 @@ async function GuestDashboard() {
   const statusEntries = Object.entries(summary.statusCounts);
 
   return (
-    <section className="page stack">
-      <AdminModeLink />
+    <section className="page guest-dashboard stack">
       <div className="page-header">
         <h2 className="section-title">Guest Dashboard</h2>
         <p className="muted">Read-only accountability snapshot. Editing and private integrations are admin-only.</p>
       </div>
 
-      <div className="grid stats">
-        <article className="card">
+      <div className="grid guest-stats">
+        <article className="card guest-metric-card">
           <p className="muted">Applications today</p>
           <p className="stat-value">{summary.applicationsToday}</p>
         </article>
-        <article className="card">
+        <article className="card guest-metric-card">
           <p className="muted">Applications yesterday</p>
           <p className="stat-value">{summary.applicationsYesterday}</p>
         </article>
-        <article className="card">
+        <article className="card guest-metric-card">
           <p className="muted">Applications this week</p>
           <p className="stat-value">{summary.applicationsThisWeek}</p>
         </article>
-        <article className="card">
+        <article className="card guest-metric-card">
           <p className="muted">Total applications</p>
           <p className="stat-value">{summary.totalApplications}</p>
         </article>
-        <article className="card">
+        <article className="card guest-metric-card">
           <p className="muted">Active tasks</p>
           <p className="stat-value">{summary.activeTasksCount}</p>
         </article>
-        <article className="card">
+        <article className="card guest-metric-card">
           <p className="muted">Follow-ups due</p>
           <p className="stat-value">{summary.followUpDueCount}</p>
         </article>
@@ -103,14 +90,14 @@ async function GuestDashboard() {
         <section className="card stack">
           <h3 className="section-title">Full Tracker</h3>
           {summary.googleSheetUrl ? (
-            <a className="primary login-button" href={summary.googleSheetUrl} target="_blank" rel="noopener noreferrer">
+            <a className="primary guest-button" href={summary.googleSheetUrl} target="_blank" rel="noopener noreferrer">
               Open Google Sheet
             </a>
           ) : (
             <p className="muted">Google Sheet link not configured.</p>
           )}
           <form action="/api/guest/logout" method="post">
-            <button className="secondary" type="submit">
+            <button className="secondary guest-button" type="submit">
               Sign out
             </button>
           </form>

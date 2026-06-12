@@ -36,7 +36,11 @@ export default async function RootLayout({
                   </button>
                 </form>
               </nav>
-            ) : null}
+            ) : (
+              <nav>
+                <Link href="/login">Admin Mode</Link>
+              </nav>
+            )}
           </div>
         </header>
         <main className="container">{children}</main>

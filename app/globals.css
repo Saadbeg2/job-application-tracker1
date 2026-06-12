@@ -145,11 +145,6 @@ nav a:hover,
   justify-self: start;
 }
 
-.guest-top-actions {
-  display: flex;
-  justify-content: flex-end;
-}
-
 .card,
 .section-card,
 .glass-card {
@@ -182,6 +177,53 @@ nav a:hover,
 
 .two-column-grid {
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.guest-access-page {
+  min-height: calc(100vh - 72px);
+  display: grid;
+  place-items: center;
+  padding: clamp(2rem, 8vh, 5rem) 0;
+}
+
+.guest-access-card {
+  width: min(480px, 100%);
+  padding: clamp(1.2rem, 3vw, 1.55rem);
+}
+
+.guest-access-card h2 {
+  font-size: 1.45rem;
+  letter-spacing: -0.025em;
+}
+
+.guest-dashboard {
+  width: min(980px, 100%);
+  margin: 0 auto;
+  padding-top: 1.6rem;
+}
+
+.guest-stats {
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 0.72rem;
+}
+
+.guest-metric-card {
+  padding: 0.78rem;
+  min-height: 104px;
+}
+
+.guest-metric-card .muted {
+  font-size: 0.78rem;
+}
+
+.guest-metric-card .stat-value {
+  font-size: 1.55rem;
+  margin-top: 0.28rem;
+}
+
+.guest-button {
+  width: fit-content;
+  justify-self: start;
 }
 
 .grid.stats > .card,
@@ -493,10 +535,15 @@ a:focus-visible {
   }
 }
 
+@media (max-width: 1080px) {
+  .guest-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 760px) {
   .topbar-inner {
-    flex-direction: column;
-    align-items: flex-start;
+    gap: 0.75rem;
   }
 
   .topbar h1 {
@@ -514,5 +561,25 @@ a:focus-visible {
 
   .stat-value {
     font-size: 1.55rem;
+  }
+
+  .guest-access-page {
+    min-height: calc(100vh - 116px);
+    padding: 2rem 0;
+  }
+
+  .guest-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 520px) {
+  .guest-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .guest-button {
+    width: 100%;
+    text-align: center;
   }
 }
