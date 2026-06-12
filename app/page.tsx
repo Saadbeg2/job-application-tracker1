@@ -1,4 +1,9 @@
 import { countApplicationsForTodayAndWeek } from "@/lib/analytics";
+import {
+  GuestCompanySuggestionsAdmin,
+  type GuestCompanySuggestionForAdmin,
+} from "@/app/_components/guest-company-suggestions-admin";
+import { GuestCompanySuggestionForm } from "@/app/_components/guest-company-suggestion-form";
 import { getAdminSession, getGuestSession } from "@/lib/authServer";
 import { ensureFollowUpTasks } from "@/lib/followUpTasks";
 import { getGuestDashboardSummary } from "@/lib/guestSummary";
@@ -10,6 +15,19 @@ type HomePageProps = {
     guest?: string;
   }>;
 };
+
+type GuestCompanySuggestionRow = {
+  id: string;
+  companyName: string;
+  suggestedBy: string | null;
+  notes: string | null;
+  status: string;
+  createdAt: Date;
+};
+
+function normalizeCompany(value: string) {
+  return value.trim().toLowerCase();
+}
 
 function GuestAccessScreen({ invalid }: { invalid: boolean }) {
   return (
@@ -74,6 +92,8 @@ async function GuestDashboard() {
         </article>
       </div>
 
+      <GuestCompanySuggestionForm />
+
       <div className="grid two-column-grid">
         <section className="card stack">
           <h3 className="section-title">Application Status</h3>
@@ -110,7 +130,18 @@ async function GuestDashboard() {
 async function AdminDashboard() {
   await ensureFollowUpTasks(prisma);
 
-  const [applications, totalApplications, pendingTasks, pendingReviewItems, pendingStatusUpdates, pendingReviewTasks, lastScan, recentApplications] =
+  const [
+    applications,
+    totalApplications,
+    pendingTasks,
+    pendingReviewItems,
+    pendingStatusUpdates,
+    pendingReviewTasks,
+    lastScan,
+    recentApplications,
+    guestSuggestions,
+    applicationCompanies,
+  ] =
     await Promise.all([
       prisma.application.findMany({
         select: { id: true, company: true, dateApplied: true },
@@ -129,8 +160,26 @@ async function AdminDashboard() {
         orderBy: [{ dateApplied: "desc" }, { createdAt: "desc" }, { updatedAt: "desc" }],
         take: 8,
       }),
+      prisma.$queryRaw<GuestCompanySuggestionRow[]>`
+        SELECT "id", "companyName", "suggestedBy", "notes", "status", "createdAt"
+        FROM "GuestCompanySuggestion"
+        ORDER BY "status" ASC, "createdAt" DESC
+      `,
+      prisma.application.findMany({
+        select: { company: true },
+      }),
     ]);
   const { applicationsToday, applicationsThisWeek } = countApplicationsForTodayAndWeek(applications);
+  const appliedCompanySet = new Set(applicationCompanies.map((application) => normalizeCompany(application.company)));
+  const guestSuggestionRows: GuestCompanySuggestionForAdmin[] = guestSuggestions.map((suggestion) => ({
+    id: suggestion.id,
+    companyName: suggestion.companyName,
+    suggestedBy: suggestion.suggestedBy,
+    notes: suggestion.notes,
+    status: suggestion.status as GuestCompanySuggestionForAdmin["status"],
+    createdAt: suggestion.createdAt.toISOString(),
+    alreadyInApplications: appliedCompanySet.has(normalizeCompany(suggestion.companyName)),
+  }));
 
   return (
     <section className="page stack">
@@ -208,6 +257,8 @@ async function AdminDashboard() {
           </table>
         </div>
       </div>
+
+      <GuestCompanySuggestionsAdmin initialSuggestions={guestSuggestionRows} />
     </section>
   );
 }

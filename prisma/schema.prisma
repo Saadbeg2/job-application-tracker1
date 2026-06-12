@@ -214,3 +214,16 @@ model DiscoveredJob {
   @@index([fitScore])
   @@index([dateFound])
 }
+
+model GuestCompanySuggestion {
+  id          String   @id @default(cuid())
+  companyName String
+  suggestedBy String?
+  notes       String?
+  status      String   @default("new")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([status])
+  @@index([createdAt])
+}

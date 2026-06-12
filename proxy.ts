@@ -8,7 +8,7 @@ import {
 
 const PUBLIC_PATHS = ["/", "/login"];
 const PUBLIC_API_PREFIXES = ["/api/auth", "/api/guest/login", "/api/guest/logout"];
-const GUEST_API_PATHS = ["/api/guest/summary"];
+const GUEST_API_PATHS = ["/api/guest/summary", "/api/guest/company-suggestions"];
 const GUEST_PAGE_PATHS = ["/"];
 
 function isPublicPath(pathname: string) {
