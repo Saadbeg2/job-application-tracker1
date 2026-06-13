@@ -157,15 +157,17 @@ export function prepareEmailBodyForLlm(bodyText: string, maxChars = 2000) {
   return cleaned.slice(0, maxChars);
 }
 
+function isLlmEligibleType(type: ReviewItemType) {
+  return (
+    type === ReviewItemType.new_application ||
+    type === ReviewItemType.status_update ||
+    type === ReviewItemType.task
+  );
+}
+
 export function shouldUseLlmFallback(classified: ClassificationResult) {
   if (classified.confidence <= 0.2) return false;
-  if (
-    ![
-      ReviewItemType.new_application,
-      ReviewItemType.status_update,
-      ReviewItemType.task,
-    ].includes(classified.type)
-  ) {
+  if (!isLlmEligibleType(classified.type)) {
     return false;
   }
 
