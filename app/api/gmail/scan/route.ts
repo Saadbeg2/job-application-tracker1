@@ -7,6 +7,7 @@ import {
   mapDetectedType,
   scanWindow,
 } from "@/lib/gmail";
+import { runLlmExtractionFallback, shouldUseLlmFallback } from "@/lib/gmailLlmExtraction";
 import { prisma } from "@/lib/prisma";
 import { ReviewStatus } from "@prisma/client";
 import { NextResponse } from "next/server";
@@ -50,6 +51,7 @@ export async function POST() {
 
       const metadata = await fetchMessageMetadata(accessToken, messageRef.id);
       const receivedAtForReview = metadata.receivedAt ? dateToChicagoStoredDate(metadata.receivedAt) : null;
+      let bodyText = "";
 
       // Privacy rule: snippet/body text are only used in memory for classification and never persisted.
       let classified = classifyGmailMessage({
@@ -60,7 +62,7 @@ export async function POST() {
 
       if (needsBodyFallback(classified)) {
         try {
-          const bodyText = await fetchMessageBodyText(accessToken, messageRef.id);
+          bodyText = await fetchMessageBodyText(accessToken, messageRef.id, 8000);
           if (bodyText) {
             classified = classifyGmailMessage({
               sender: metadata.sender,
@@ -74,6 +76,25 @@ export async function POST() {
         }
       }
 
+      const hybridExtraction =
+        bodyText && shouldUseLlmFallback(classified)
+          ? await runLlmExtractionFallback(classified, {
+              sender: metadata.sender,
+              subject: metadata.subject,
+              bodyText,
+            })
+          : {
+              result: classified,
+              extractionMethod: classified.reason.startsWith("LinkedIn")
+                ? "rule:linkedin_subject"
+                : classified.reason.startsWith("Ashby")
+                  ? "rule:ashby_subject"
+                  : "rule",
+              extractionReason: classified.reason,
+            };
+
+      classified = hybridExtraction.result;
+
       // Skip very low-confidence or non-actionable detections (e.g., digest/newsletter noise).
       if (classified.confidence <= 0.2) {
         skippedDuplicates += 1;
@@ -81,7 +102,7 @@ export async function POST() {
       }
 
       await prisma.$transaction(async (tx) => {
-        await tx.reviewItem.create({
+        const reviewItem = await tx.reviewItem.create({
           data: {
             type: classified.type,
             reviewStatus: ReviewStatus.pending,
@@ -99,12 +120,22 @@ export async function POST() {
             confidence: classified.confidence,
             extractedDataJson: JSON.stringify({
               reason: classified.reason,
+              extractionMethod: hybridExtraction.extractionMethod,
+              extractionReason: hybridExtraction.extractionReason,
               senderDomain: metadata.sender.split("@")[1] ?? null,
               location: classified.location,
               chicagoReceivedDate: metadata.receivedAt ? toChicagoDateKey(metadata.receivedAt) : null,
             }),
           },
         });
+
+        await tx.$executeRaw`
+          UPDATE "ReviewItem"
+          SET
+            "extractionMethod" = ${hybridExtraction.extractionMethod},
+            "extractionReason" = ${hybridExtraction.extractionReason}
+          WHERE "id" = ${reviewItem.id}
+        `;
 
         await tx.emailMetadata.create({
           data: {

@@ -97,6 +97,8 @@ model ReviewItem {
   confidence          Float?
   matchedApplicationId Int?
   extractedDataJson   String?
+  extractionMethod    String?
+  extractionReason    String?
   createdAt           DateTime       @default(now())
   updatedAt           DateTime       @updatedAt
   matchedApplication  Application?   @relation("MatchedApplicationReviewItems", fields: [matchedApplicationId], references: [id], onDelete: SetNull)

@@ -1,13 +1,13 @@
 import { ApplicationStatus, ReviewItemType } from "@prisma/client";
 
-type ClassifierInput = {
+export type ClassifierInput = {
   sender: string;
   subject: string;
   snippet: string;
   bodyText?: string | null;
 };
 
-type ClassificationResult = {
+export type ClassificationResult = {
   type: ReviewItemType;
   confidence: number;
   company: string;
@@ -212,7 +212,7 @@ function normalizeWhitespace(value: string) {
 }
 
 function stripTrailingPunctuation(value: string) {
-  return value.replace(/[.!:;,]+$/g, "").trim();
+  return value.replace(/[!:;,]+$/g, "").trim();
 }
 
 function cleanCandidate(value: string) {
@@ -383,7 +383,7 @@ function parseLinkedInApplication(sender: string, sections: TextSection[]): Extr
   const isLinkedIn = sender.toLowerCase().includes("linkedin.com") || /your application was sent to\s+/i.test(subject);
   if (!isLinkedIn) return null;
 
-  const subjectMatch = subject.match(/your application was sent to\s+([^.!?\n\r]+?)(?:[.!?]|$)/i);
+  const subjectMatch = subject.match(/your application was sent to\s+(.+?)\s*$/i);
   const subjectCompany = sanitizeCompany(subjectMatch?.[1]);
   if (!subjectCompany) return null;
 

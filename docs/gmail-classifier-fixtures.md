@@ -21,6 +21,43 @@ Expected:
 - `suggestedStatus`: `Applied`
 - `reason`: `LinkedIn body parser` or `LinkedIn subject parser` if body is unavailable
 
+## LinkedIn Squadron Data LLM Fallback
+
+Input:
+
+- Sender: `LinkedIn <jobs-noreply@linkedin.com>`
+- Subject: `Saad Salman, your application was sent to Squadron Data, Inc.`
+- Cleaned body:
+  - `Your application was sent to Squadron Data, Inc.`
+  - `Snowflake Solutions Architect`
+  - `Squadron Data, Inc.`
+  - `Kansas City, MO`
+  - `View similar jobs you may be interested in...`
+
+Expected:
+
+- `type`: `new_application`
+- `company`: `Squadron Data, Inc.`
+- `role`: `Snowflake Solutions Architect`
+- `location`: `Kansas City, MO`
+- `suggestedStatus`: `Applied`
+- `extractionMethod`: `hybrid:rule_plus_llm` when LLM fallback is enabled
+- Body sent to the LLM should be cut before `View similar jobs`.
+
+## LinkedIn Similar Jobs Ignored
+
+Input:
+
+- Sender: `LinkedIn <jobs-noreply@linkedin.com>`
+- Subject: `Saad Salman, your application was sent to Squadron Data, Inc.`
+- Cleaned body starts with actual application details and later contains `View similar jobs`, followed by unrelated recommended jobs.
+
+Expected:
+
+- Company remains `Squadron Data, Inc.`
+- Role/location must come only from the actual application section before `View similar jobs`.
+- Recommended/similar jobs must not be extracted.
+
 ## Illumio / Ashby Role-at-Company
 
 Input:
@@ -35,6 +72,22 @@ Expected:
 - `role`: `Infrastructure Administrator I, Cloud AI`
 - `suggestedStatus`: `Applied`
 - `reason`: `Ashby role-at-company subject parser`
+
+## Missing Role Stays Null
+
+Input:
+
+- Sender: `Rolfson Oil <noreply@applytojob.com>`
+- Subject/body: `Saad, we've received your resume ... interest in employment at Rolfson Oil ... reviewed by our recruiting team`
+- No role/title is explicitly present.
+
+Expected:
+
+- `type`: `new_application`
+- `company`: `Rolfson Oil`
+- `role`: `null`
+- `suggestedStatus`: `Applied`
+- LLM fallback, if enabled, should not invent a role.
 
 ## LinkedIn Newsletter False Positive
 
