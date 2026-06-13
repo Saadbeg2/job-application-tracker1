@@ -22,8 +22,6 @@ type ReviewItem = {
   confidence: number | null;
   matchedApplicationId: number | null;
   extractedDataJson: string | null;
-  extractionMethod: string | null;
-  extractionReason: string | null;
 };
 
 type Match = {
@@ -252,8 +250,6 @@ export default function ReviewPage() {
           <p><strong>Sender:</strong> {item.emailSender ?? "-"}</p>
           <p><strong>Received:</strong> {item.emailReceivedAt ? toChicagoDateKey(new Date(item.emailReceivedAt)) : "-"}</p>
           <p><strong>Confidence:</strong> {item.confidence ?? "-"}</p>
-          <p><strong>Extraction:</strong> {item.extractionMethod ?? "-"}</p>
-          {item.extractionReason ? <p className="muted"><strong>Extraction reason:</strong> {item.extractionReason}</p> : null}
           <p><strong>Suggested status:</strong> {item.suggestedStatus ?? "-"}</p>
           <p><strong>Task title:</strong> {item.taskTitle ?? "-"}</p>
           <p><strong>Source:</strong> {item.source ?? "-"}</p>

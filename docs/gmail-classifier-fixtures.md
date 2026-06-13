@@ -21,7 +21,7 @@ Expected:
 - `suggestedStatus`: `Applied`
 - `reason`: `LinkedIn body parser` or `LinkedIn subject parser` if body is unavailable
 
-## LinkedIn Squadron Data LLM Fallback
+## LinkedIn Squadron Data Body Parser
 
 Input:
 
@@ -41,8 +41,7 @@ Expected:
 - `role`: `Snowflake Solutions Architect`
 - `location`: `Kansas City, MO`
 - `suggestedStatus`: `Applied`
-- `extractionMethod`: `hybrid:rule_plus_llm` when LLM fallback is enabled
-- Body sent to the LLM should be cut before `View similar jobs`.
+- Body parsing should cut before `View similar jobs`.
 
 ## LinkedIn Similar Jobs Ignored
 
@@ -87,7 +86,7 @@ Expected:
 - `company`: `Rolfson Oil`
 - `role`: `null`
 - `suggestedStatus`: `Applied`
-- LLM fallback, if enabled, should not invent a role.
+- The deterministic parser should not invent a role.
 
 ## LinkedIn Newsletter False Positive
 

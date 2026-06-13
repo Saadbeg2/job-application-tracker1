@@ -180,6 +180,13 @@ const badExtractionPhrases = [
   "recommended jobs",
 ];
 
+const recommendedJobsCutoffMarkers = [
+  "View similar jobs",
+  "Recommended for you",
+  "You might also like",
+  "Similar jobs",
+];
+
 const roleWords = [
   "administrator",
   "analyst",
@@ -277,7 +284,13 @@ function createTextSections(input: ClassifierInput): TextSection[] {
 }
 
 function linesFromText(text: string) {
-  return text
+  const lower = text.toLowerCase();
+  const cutoffIndexes = recommendedJobsCutoffMarkers
+    .map((marker) => lower.indexOf(marker.toLowerCase()))
+    .filter((index) => index >= 0);
+  const applicationText = cutoffIndexes.length > 0 ? text.slice(0, Math.min(...cutoffIndexes)) : text;
+
+  return applicationText
     .split(/\r?\n+/)
     .map((line) => cleanCandidate(line))
     .filter(Boolean);
@@ -398,22 +411,42 @@ function parseLinkedInApplication(sender: string, sections: TextSection[]): Extr
       const cardMatch = line.match(
         /^(.+?)\s*[·•|]\s*(united states\s*\(\s*remote\s*\)|remote(?:,\s*us)?|hybrid|[A-Za-z .'-]+,\s*[A-Z]{2})$/i,
       );
-      if (!cardMatch) continue;
 
-      const possibleCompany = sanitizeCompany(cardMatch[1]);
-      const possibleLocation = extractLocation(cardMatch[2]);
-      if (!possibleCompany || possibleCompany.toLowerCase() !== subjectCompany.toLowerCase()) continue;
+      if (cardMatch) {
+        const possibleCompany = sanitizeCompany(cardMatch[1]);
+        const possibleLocation = extractLocation(cardMatch[2]);
+        if (possibleCompany && possibleCompany.toLowerCase() === subjectCompany.toLowerCase()) {
+          bodyCompany = possibleCompany;
+          location = possibleLocation ?? location;
 
-      bodyCompany = possibleCompany;
-      location = possibleLocation ?? location;
+          for (let previous = index - 1; previous >= 0; previous -= 1) {
+            const possibleRole = sanitizeRole(lines[previous]);
+            if (!possibleRole) continue;
+            if (possibleRole.toLowerCase() === subjectCompany.toLowerCase()) continue;
+            if (/^(view job|application sent|your application)$/i.test(possibleRole)) continue;
+            role = possibleRole;
+            break;
+          }
+        }
+      }
 
-      for (let previous = index - 1; previous >= 0; previous -= 1) {
-        const possibleRole = sanitizeRole(lines[previous]);
-        if (!possibleRole) continue;
-        if (possibleRole.toLowerCase() === subjectCompany.toLowerCase()) continue;
-        if (/^(view job|application sent|your application)$/i.test(possibleRole)) continue;
+      if (role && location) continue;
+
+      const lineCompany = sanitizeCompany(line);
+      if (!lineCompany || lineCompany.toLowerCase() !== subjectCompany.toLowerCase()) continue;
+
+      const nextLine = lines[index + 1] ?? "";
+      const previousLine = lines[index - 1] ?? "";
+      const possibleLocation = extractLocation(nextLine);
+      const possibleRole = sanitizeRole(previousLine);
+
+      if (possibleLocation) {
+        bodyCompany = lineCompany;
+        location = possibleLocation;
+      }
+
+      if (possibleRole && possibleRole.toLowerCase() !== subjectCompany.toLowerCase()) {
         role = possibleRole;
-        break;
       }
     }
   }
