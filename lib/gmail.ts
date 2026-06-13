@@ -145,7 +145,17 @@ type GmailMessageResponse = {
   internalDate?: string;
   payload?: {
     headers?: Array<{ name: string; value: string }>;
+    mimeType?: string;
+    body?: { data?: string };
+    parts?: GmailMessagePart[];
   };
+};
+
+type GmailMessagePart = {
+  mimeType?: string;
+  filename?: string;
+  body?: { data?: string };
+  parts?: GmailMessagePart[];
 };
 
 export async function listJobRelatedMessageIds(accessToken: string) {
@@ -193,6 +203,75 @@ export async function fetchMessageMetadata(accessToken: string, messageId: strin
     snippet: data.snippet ?? "",
     receivedAt: data.internalDate ? new Date(Number(data.internalDate)) : dateHeader ? new Date(dateHeader) : null,
   };
+}
+
+function decodeBase64Url(data: string) {
+  const normalized = data.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+  return Buffer.from(padded, "base64").toString("utf8");
+}
+
+function stripHtmlToText(html: string) {
+  return html
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(?:p|div|li|tr|h[1-6])>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, "\"")
+    .replace(/&#39;/gi, "'")
+    .replace(/\r/g, "\n")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n\s+/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function collectBodyParts(part: GmailMessagePart | undefined, textParts: string[], htmlParts: string[]) {
+  if (!part) return;
+
+  const mimeType = part.mimeType?.toLowerCase() ?? "";
+  const data = part.body?.data;
+
+  // Attachments can also carry body data; skip anything with a filename to avoid processing attachment contents.
+  if (data && !part.filename) {
+    if (mimeType === "text/plain") {
+      textParts.push(decodeBase64Url(data));
+    } else if (mimeType === "text/html") {
+      htmlParts.push(stripHtmlToText(decodeBase64Url(data)));
+    }
+  }
+
+  for (const child of part.parts ?? []) {
+    collectBodyParts(child, textParts, htmlParts);
+  }
+}
+
+export async function fetchMessageBodyText(accessToken: string, messageId: string, maxChars = 5000) {
+  const response = await fetch(`${GMAIL_API_BASE}/messages/${messageId}?format=full`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch message body for ${messageId}`);
+  }
+
+  const data = (await response.json()) as GmailMessageResponse;
+  const textParts: string[] = [];
+  const htmlParts: string[] = [];
+  collectBodyParts(data.payload, textParts, htmlParts);
+
+  const bodyText = (textParts.length > 0 ? textParts.join("\n") : htmlParts.join("\n"))
+    .replace(/\r/g, "\n")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+  return bodyText.slice(0, maxChars);
 }
 
 export function scanWindow() {

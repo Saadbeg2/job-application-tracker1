@@ -1,9 +1,23 @@
 import { classifyGmailMessage } from "@/lib/gmailClassifier";
-import { getValidAccessToken, listJobRelatedMessageIds, fetchMessageMetadata, mapDetectedType, scanWindow } from "@/lib/gmail";
+import {
+  fetchMessageBodyText,
+  fetchMessageMetadata,
+  getValidAccessToken,
+  listJobRelatedMessageIds,
+  mapDetectedType,
+  scanWindow,
+} from "@/lib/gmail";
 import { prisma } from "@/lib/prisma";
 import { ReviewStatus } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { dateToChicagoStoredDate, toChicagoDateKey } from "@/lib/dates";
+
+function needsBodyFallback(classified: ReturnType<typeof classifyGmailMessage>) {
+  if (classified.confidence <= 0.2) return false;
+  const missingCompany = !classified.company || classified.company === "Unknown Company";
+  const missingRole = !classified.role && classified.type !== "task";
+  return missingCompany || missingRole || classified.confidence < 0.85;
+}
 
 export async function POST() {
   const scanStartedAt = new Date();
@@ -37,12 +51,28 @@ export async function POST() {
       const metadata = await fetchMessageMetadata(accessToken, messageRef.id);
       const receivedAtForReview = metadata.receivedAt ? dateToChicagoStoredDate(metadata.receivedAt) : null;
 
-      // Privacy rule: snippet is only used in memory for classification and never persisted.
-      const classified = classifyGmailMessage({
+      // Privacy rule: snippet/body text are only used in memory for classification and never persisted.
+      let classified = classifyGmailMessage({
         sender: metadata.sender,
         subject: metadata.subject,
         snippet: metadata.snippet,
       });
+
+      if (needsBodyFallback(classified)) {
+        try {
+          const bodyText = await fetchMessageBodyText(accessToken, messageRef.id);
+          if (bodyText) {
+            classified = classifyGmailMessage({
+              sender: metadata.sender,
+              subject: metadata.subject,
+              snippet: metadata.snippet,
+              bodyText,
+            });
+          }
+        } catch {
+          // Keep the metadata/snippet classification if Gmail full-message fetch fails.
+        }
+      }
 
       // Skip very low-confidence or non-actionable detections (e.g., digest/newsletter noise).
       if (classified.confidence <= 0.2) {

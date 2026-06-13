@@ -4,6 +4,7 @@ type ClassifierInput = {
   sender: string;
   subject: string;
   snippet: string;
+  bodyText?: string | null;
 };
 
 type ClassificationResult = {
@@ -14,6 +15,18 @@ type ClassificationResult = {
   location: string | null;
   suggestedStatus: ApplicationStatus | null;
   taskTitle: string | null;
+  reason: string;
+};
+
+type TextSection = {
+  label: "subject" | "snippet" | "body";
+  text: string;
+};
+
+type ExtractedFields = {
+  company: string | null;
+  role: string | null;
+  location: string | null;
   reason: string;
 };
 
@@ -153,8 +166,121 @@ const jobPlatformDomains = [
   "applytojob.com",
 ];
 
+const badExtractionPhrases = [
+  "your application was sent",
+  "thank you for applying",
+  "application was received",
+  "application received",
+  "application submitted",
+  "we received your application",
+  "your resume has been received",
+  "reviewed by our recruiting team",
+  "candidate portal",
+  "unsubscribe",
+  "recommended jobs",
+];
+
+const roleWords = [
+  "administrator",
+  "analyst",
+  "engineer",
+  "developer",
+  "specialist",
+  "manager",
+  "director",
+  "intern",
+  "architect",
+  "consultant",
+  "technician",
+  "scientist",
+  "associate",
+  "infrastructure",
+  "software",
+  "data",
+  "cloud",
+  "systems",
+  "network",
+  "support",
+];
+
 function includesAny(text: string, phrases: string[]) {
   return phrases.some((phrase) => text.includes(phrase));
+}
+
+function normalizeWhitespace(value: string) {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function stripTrailingPunctuation(value: string) {
+  return value.replace(/[.!:;,]+$/g, "").trim();
+}
+
+function cleanCandidate(value: string) {
+  return stripTrailingPunctuation(
+    normalizeWhitespace(
+      value
+        .replace(/^[-–—•·|]+/, "")
+        .replace(/[-–—•·|]+$/, "")
+        .replace(/^company:\s*/i, "")
+        .replace(/^role:\s*/i, "")
+        .replace(/^job title:\s*/i, ""),
+    ),
+  );
+}
+
+function looksLikeSentence(value: string) {
+  const words = value.split(/\s+/).filter(Boolean);
+  return words.length > 8 && /\b(application|applying|received|submitted|thank|interest|position)\b/i.test(value);
+}
+
+function hasDuplicatedPhrase(value: string) {
+  const lower = value.toLowerCase();
+  return /(.{12,})\s+\1/.test(lower) || lower.split("your application was sent").length > 2;
+}
+
+function sanitizeCompany(value: string | null | undefined) {
+  if (!value) return null;
+  const cleaned = cleanCandidate(value);
+  const lower = cleaned.toLowerCase();
+  if (!cleaned || cleaned.length > 80) return null;
+  if (badExtractionPhrases.some((phrase) => lower.includes(phrase))) return null;
+  if (cleaned.includes("---")) return null;
+  if (hasDuplicatedPhrase(cleaned)) return null;
+  if (looksLikeSentence(cleaned)) return null;
+  if (/^the\s+/i.test(cleaned) && roleWords.some((word) => lower.includes(word))) return null;
+  if (/^(role|position|job|application)\b/i.test(cleaned)) return null;
+  return cleaned;
+}
+
+function sanitizeRole(value: string | null | undefined) {
+  if (!value) return null;
+  const cleaned = cleanCandidate(value).replace(/\s+role$/i, "").trim();
+  const lower = cleaned.toLowerCase();
+  if (!cleaned || cleaned.length > 120) return null;
+  if (badExtractionPhrases.some((phrase) => lower.includes(phrase))) return null;
+  if (cleaned.includes("---")) return null;
+  if (hasDuplicatedPhrase(cleaned)) return null;
+  if (looksLikeSentence(cleaned)) return null;
+  return cleaned;
+}
+
+function createTextSections(input: ClassifierInput): TextSection[] {
+  const sections: TextSection[] = [
+    { label: "subject", text: input.subject },
+    { label: "snippet", text: input.snippet },
+    { label: "body", text: input.bodyText ?? "" },
+  ];
+
+  return sections
+    .map((section) => ({ ...section, text: section.text.trim() }))
+    .filter((section) => section.text.length > 0);
+}
+
+function linesFromText(text: string) {
+  return text
+    .split(/\r?\n+/)
+    .map((line) => cleanCandidate(line))
+    .filter(Boolean);
 }
 
 function extractDisplayNameFromSender(sender: string) {
@@ -176,35 +302,42 @@ function extractCompanyFromSender(sender: string) {
   const domainLower = domain.toLowerCase();
 
   if (domainLower.includes("myworkday.com") && localPart) {
-    return localPart
-      .split(/[._-]/)
-      .filter(Boolean)
-      .map((chunk) => chunk.charAt(0).toUpperCase() + chunk.slice(1))
-      .join(" ");
+    return sanitizeCompany(
+      localPart
+        .split(/[._-]/)
+        .filter(Boolean)
+        .map((chunk) => chunk.charAt(0).toUpperCase() + chunk.slice(1))
+        .join(" "),
+    ) ?? "Unknown Company";
   }
 
   if (domainLower.includes("amazon.jobs")) return "Amazon";
   if (domainLower.includes("nagarro.com")) return "Nagarro";
   if (domainLower.includes("indeed.com")) return "Unknown Company";
   if (domainLower.includes("applytojob.com")) {
-    return extractDisplayNameFromSender(sender) ?? "Unknown Company";
+    return sanitizeCompany(extractDisplayNameFromSender(sender)) ?? "Unknown Company";
   }
 
   const fromPlatform = jobPlatformDomains.some((platformDomain) => domainLower.includes(platformDomain));
   if (fromPlatform) {
-    return extractDisplayNameFromSender(sender) ?? "Unknown Company";
+    return sanitizeCompany(extractDisplayNameFromSender(sender)) ?? "Unknown Company";
   }
 
   const domainLabel = domain.split(".")[0] ?? "";
   if (!domainLabel) return "Unknown Company";
-  return domainLabel
-    .split(/[-_]/)
-    .map((chunk) => chunk.charAt(0).toUpperCase() + chunk.slice(1))
-    .join(" ");
+  return sanitizeCompany(
+    domainLabel
+      .split(/[-_]/)
+      .map((chunk) => chunk.charAt(0).toUpperCase() + chunk.slice(1))
+      .join(" "),
+  ) ?? "Unknown Company";
 }
 
 function extractLocation(text: string) {
   const cleanedText = text.replace(/\s+/g, " ").trim();
+
+  const unitedStatesRemoteMatch = cleanedText.match(/\bunited states\s*\(\s*remote\s*\)/i);
+  if (unitedStatesRemoteMatch) return "United States (Remote)";
 
   const remoteMatch = cleanedText.match(/\b(remote,\s*us|united states remote|remote|hybrid)\b/i);
   if (remoteMatch?.[1]) {
@@ -216,14 +349,14 @@ function extractLocation(text: string) {
   }
 
   const labelMatch = cleanedText.match(
-    /\b(?:job location|location):\s*([A-Za-z .'-]+,\s*[A-Z]{2}|remote(?:,\s*[A-Za-z]+)?|united states remote|hybrid)\b/i,
+    /\b(?:job location|location):\s*([A-Za-z .'-]+,\s*[A-Z]{2}|united states\s*\(\s*remote\s*\)|remote(?:,\s*[A-Za-z]+)?|united states remote|hybrid)\b/i,
   );
-  if (labelMatch?.[1]) return labelMatch[1].trim();
+  if (labelMatch?.[1]) return labelMatch[1].trim().replace(/\s+/g, " ");
 
   const dashMatch = cleanedText.match(
-    /\b([A-Z][A-Za-z0-9 '&.-]{1,80}|[A-Za-z0-9][A-Za-z0-9 /,&()-]{1,80})\s*-\s*([A-Za-z .'-]+,\s*[A-Z]{2}|remote(?:,\s*[A-Za-z]+)?|united states remote|hybrid)\b/,
+    /\b([A-Z][A-Za-z0-9 '&.-]{1,80}|[A-Za-z0-9][A-Za-z0-9 /,&()-]{1,80})\s*[-–—·•]\s*([A-Za-z .'-]+,\s*[A-Z]{2}|united states\s*\(\s*remote\s*\)|remote(?:,\s*[A-Za-z]+)?|united states remote|hybrid)\b/i,
   );
-  if (dashMatch?.[2]) return dashMatch[2].trim();
+  if (dashMatch?.[2]) return dashMatch[2].trim().replace(/\s+/g, " ");
 
   const cityStateMatch = cleanedText.match(/\b([A-Za-z .'-]+,\s*[A-Z]{2})\b/);
   if (cityStateMatch?.[1]) return cityStateMatch[1].trim();
@@ -235,67 +368,143 @@ function extractIndeedCompany(text: string) {
   const cleanedText = text.replace(/\s+/g, " ").trim();
 
   const sentToMatch = cleanedText.match(/the following items were sent to\s+([A-Za-z0-9][A-Za-z0-9 &.-]{1,80})/i);
-  if (sentToMatch?.[1]) return sentToMatch[1].trim();
+  if (sentToMatch?.[1]) return sanitizeCompany(sentToMatch[1]);
 
   const companyDashLocationMatch = cleanedText.match(
-    /\b([A-Z][A-Za-z0-9 '&.-]{1,80})\s*-\s*([A-Za-z .'-]+,\s*[A-Z]{2}|remote(?:,\s*[A-Za-z]+)?|united states remote|hybrid)\b/,
+    /\b([A-Z][A-Za-z0-9 '&.-]{1,80})\s*[-–—·•]\s*([A-Za-z .'-]+,\s*[A-Z]{2}|united states\s*\(\s*remote\s*\)|remote(?:,\s*[A-Za-z]+)?|united states remote|hybrid)\b/i,
   );
-  if (companyDashLocationMatch?.[1]) return companyDashLocationMatch[1].trim();
+  if (companyDashLocationMatch?.[1]) return sanitizeCompany(companyDashLocationMatch[1]);
 
   return null;
 }
 
-function extractCompany(text: string, sender: string) {
-  const cleanedText = text.replace(/\s+/g, " ").trim();
+function parseLinkedInApplication(sender: string, sections: TextSection[]): ExtractedFields | null {
+  const subject = sections.find((section) => section.label === "subject")?.text ?? "";
+  const isLinkedIn = sender.toLowerCase().includes("linkedin.com") || /your application was sent to\s+/i.test(subject);
+  if (!isLinkedIn) return null;
+
+  const subjectMatch = subject.match(/your application was sent to\s+([^.!?\n\r]+?)(?:[.!?]|$)/i);
+  const subjectCompany = sanitizeCompany(subjectMatch?.[1]);
+  if (!subjectCompany) return null;
+
+  let role: string | null = null;
+  let location: string | null = null;
+  let bodyCompany: string | null = null;
+
+  for (const section of sections.filter((candidate) => candidate.label !== "subject")) {
+    const lines = linesFromText(section.text);
+    for (let index = 0; index < lines.length; index += 1) {
+      const line = lines[index];
+      const cardMatch = line.match(
+        /^(.+?)\s*[·•|]\s*(united states\s*\(\s*remote\s*\)|remote(?:,\s*us)?|hybrid|[A-Za-z .'-]+,\s*[A-Z]{2})$/i,
+      );
+      if (!cardMatch) continue;
+
+      const possibleCompany = sanitizeCompany(cardMatch[1]);
+      const possibleLocation = extractLocation(cardMatch[2]);
+      if (!possibleCompany || possibleCompany.toLowerCase() !== subjectCompany.toLowerCase()) continue;
+
+      bodyCompany = possibleCompany;
+      location = possibleLocation ?? location;
+
+      for (let previous = index - 1; previous >= 0; previous -= 1) {
+        const possibleRole = sanitizeRole(lines[previous]);
+        if (!possibleRole) continue;
+        if (possibleRole.toLowerCase() === subjectCompany.toLowerCase()) continue;
+        if (/^(view job|application sent|your application)$/i.test(possibleRole)) continue;
+        role = possibleRole;
+        break;
+      }
+    }
+  }
+
+  return {
+    company: bodyCompany ?? subjectCompany,
+    role,
+    location,
+    reason: role || location ? "LinkedIn body parser" : "LinkedIn subject parser",
+  };
+}
+
+function parseRoleAtCompanySubject(subject: string): ExtractedFields | null {
   const patterns = [
-    /your application was sent to\s+([^\n\r.,;:!?]+?)(?:[.,;:!?]|\n|\r|$)/i,
+    /thank you for applying for\s+(?:the\s+)?(.+?)\s+(?:role|position)\s+at\s+(.+?)(?:[.!?]|$)/i,
+    /thanks for applying for\s+(?:the\s+)?(.+?)\s+(?:role|position)\s+at\s+(.+?)(?:[.!?]|$)/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = subject.match(pattern);
+    if (!match?.[1] || !match?.[2]) continue;
+    const role = sanitizeRole(match[1]);
+    const company = sanitizeCompany(match[2]);
+    if (role && company) {
+      return {
+        company,
+        role,
+        location: extractLocation(subject),
+        reason: "Ashby role-at-company subject parser",
+      };
+    }
+  }
+
+  return null;
+}
+
+function extractCompanyFromSections(sections: TextSection[], sender: string) {
+  const patterns = [
+    /your application was sent to\s+([^.!?\n\r]+?)(?:[.!?]|$)/i,
     /thank you for applying to\s+([A-Za-z0-9][A-Za-z0-9 &.-]{1,80})(?:[.!,:;]|$)/i,
     /application to\s+([A-Za-z0-9][A-Za-z0-9 &.-]{1,80})(?:[.!,:;]|$)/i,
     /applying to\s+([A-Za-z0-9][A-Za-z0-9 &.-]{1,80})(?:[.!,:;]|$)/i,
     /\bat\s+([A-Za-z0-9][A-Za-z0-9 &.-]{1,80})(?:[.!,:;]|$)/i,
-    /thanks for applying to\s+([A-Za-z0-9 &.-]+)/i,
+    /thanks for applying to\s+([A-Za-z0-9 &.-]+?)(?:[.!,:;]|$)/i,
     /interest in employment at\s+([A-Za-z0-9][A-Za-z0-9 &.-]{1,80})(?:[.!,:;]|$)/i,
-    /your application to\s+([A-Za-z0-9 &.-]+)/i,
-    /interview with\s+([A-Za-z0-9 &.-]+)/i,
+    /your application to\s+([A-Za-z0-9 &.-]+?)(?:[.!,:;]|$)/i,
+    /interview with\s+([A-Za-z0-9 &.-]+?)(?:[.!,:;]|$)/i,
   ];
 
-  for (const pattern of patterns) {
-    const match = cleanedText.match(pattern);
-    if (!match?.[1]) continue;
-    const candidate = match[1].trim();
-
-    if (/^the position\b/i.test(candidate) || /^position\b/i.test(candidate)) continue;
-    if (/^[A-Z][a-z]+\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?$/.test(candidate)) continue;
-
-    return candidate;
+  for (const section of sections) {
+    const cleanedText = section.text.replace(/\r/g, "\n");
+    for (const pattern of patterns) {
+      const match = cleanedText.match(pattern);
+      const candidate = sanitizeCompany(match?.[1]);
+      if (candidate) return candidate;
+    }
   }
 
   return extractCompanyFromSender(sender);
 }
 
-function extractRole(text: string) {
-  const cleaned = text.replace(/\s+/g, " ").trim();
+function extractRoleFromSections(sections: TextSection[]) {
   const patterns = [
-    /indeed application:\s*([^\n\r]+?)(?:\s{2,}|$)/i,
+    /indeed application:\s*([^\n\r.!?]+?)(?:[.!?]|\n|\r|$)/i,
     /(?:the\s+)?position\s+of\s+([A-Za-z0-9][A-Za-z0-9 /,&()-]{1,100}?)(?:\s+at\s+[A-Za-z0-9]|[.!,:;]|$)/i,
     /about\s+the\s+([A-Za-z0-9][A-Za-z0-9 /,&()-]{1,100}?)\s+position/i,
     /appl(?:y|ied)\s+to\s+the\s+position\s+for\s+([A-Za-z0-9][A-Za-z0-9 /,&()-]{1,80}?)(?:[.!,:;]|$)/i,
     /position\s+for\s+([A-Za-z0-9][A-Za-z0-9 /,&()-]{1,80}?)(?:[.!,:;]|$)/i,
     /application\s+for\s+([A-Za-z0-9][A-Za-z0-9 /,&()-]{1,80}?)(?:[.!,:;]|$)/i,
-    /for the\s+([A-Za-z0-9 /-]+?)\s+position/i,
-    /your application for\s+([A-Za-z0-9 /-]+)/i,
+    /for the\s+([A-Za-z0-9 /,&()-]+?)\s+position/i,
+    /your application for\s+([A-Za-z0-9 /,&()-]+?)(?:[.!,:;]|$)/i,
     /(software engineer|backend engineer|frontend engineer|new grad software engineer|data engineer)/i,
   ];
 
-  for (const pattern of patterns) {
-    const match = cleaned.match(pattern);
-    if (match?.[1]) {
-      const noParens = match[1].replace(/\([^)]*\)/g, " ");
-      return noParens.trim().replace(/\s+/g, " ");
+  for (const section of sections) {
+    const cleaned = section.text.replace(/\r/g, "\n");
+    for (const pattern of patterns) {
+      const match = cleaned.match(pattern);
+      const candidate = sanitizeRole(match?.[1] ?? match?.[0]);
+      if (candidate) return candidate;
     }
-    if (match?.[0] && pattern.source.includes("software engineer")) return match[0].trim();
   }
 
+  return null;
+}
+
+function extractLocationFromSections(sections: TextSection[]) {
+  for (const section of sections) {
+    const location = extractLocation(section.text);
+    if (location) return location;
+  }
   return null;
 }
 
@@ -308,17 +517,38 @@ function chooseTaskTitle(text: string) {
   return "Complete action required task";
 }
 
-export function classifyGmailMessage(input: ClassifierInput): ClassificationResult {
-  const merged = `${input.subject} ${input.snippet}`.toLowerCase();
-  const sourceText = `${input.subject} ${input.snippet}`;
+function selectExtraction(input: ClassifierInput, sections: TextSection[]) {
   const senderLower = input.sender.toLowerCase();
+  const subject = sections.find((section) => section.label === "subject")?.text ?? "";
 
+  const linkedInExtraction = parseLinkedInApplication(input.sender, sections);
+  if (linkedInExtraction) return linkedInExtraction;
+
+  const roleAtCompany = parseRoleAtCompanySubject(subject);
+  if (roleAtCompany) return roleAtCompany;
+
+  const joinedText = sections.map((section) => section.text).join("\n");
   const isIndeedSender = senderLower.includes("indeed.com") || senderLower.includes("indeed apply");
-  const indeedCompany = isIndeedSender ? extractIndeedCompany(sourceText) : null;
+  const indeedCompany = isIndeedSender ? extractIndeedCompany(joinedText) : null;
 
-  const company = indeedCompany ?? extractCompany(sourceText, input.sender);
-  const role = extractRole(sourceText);
-  const location = extractLocation(sourceText);
+  return {
+    company: indeedCompany ?? extractCompanyFromSections(sections, input.sender),
+    role: extractRoleFromSections(sections),
+    location: extractLocationFromSections(sections),
+    reason: indeedCompany ? "Indeed parser" : input.bodyText ? "Body parser fallback" : "Generic application confirmation",
+  };
+}
+
+export function classifyGmailMessage(input: ClassifierInput): ClassificationResult {
+  const sections = createTextSections(input);
+  const merged = sections.map((section) => section.text).join("\n").toLowerCase();
+  const sourceText = sections.map((section) => section.text).join("\n");
+  const senderLower = input.sender.toLowerCase();
+  const extraction = selectExtraction(input, sections);
+
+  const company = extraction.company ?? "";
+  const role = extraction.role;
+  const location = extraction.location;
 
   const hasStrongApplicationSignal =
     includesAny(merged, newApplicationPhrases) ||
@@ -327,6 +557,7 @@ export function classifyGmailMessage(input: ClassifierInput): ClassificationResu
     includesAny(merged, taskPhrases) ||
     includesAny(merged, strongOfferPhrases) ||
     /your application was sent to\s+/i.test(sourceText) ||
+    /thank you for applying for\s+.+?\s+(?:role|position)\s+at\s+/i.test(sourceText) ||
     /interest in employment at\s+/i.test(sourceText);
 
   const hasActionWords = includesAny(merged, actionWords);
@@ -382,6 +613,7 @@ export function classifyGmailMessage(input: ClassifierInput): ClassificationResu
     };
   }
 
+  const isIndeedSender = senderLower.includes("indeed.com") || senderLower.includes("indeed apply");
   const hasIndeedApplicationSignals =
     isIndeedSender &&
     (/indeed application:\s*/i.test(sourceText) ||
@@ -392,29 +624,39 @@ export function classifyGmailMessage(input: ClassifierInput): ClassificationResu
     return {
       type: ReviewItemType.new_application,
       confidence: 0.92,
-      company: indeedCompany ?? "Unknown Company",
-      role: role ?? null,
+      company: company || "Unknown Company",
+      role,
       location,
       suggestedStatus: ApplicationStatus.Applied,
       taskTitle: null,
-      reason: "Indeed application pattern detected",
+      reason: extraction.reason || "Indeed parser",
     };
   }
 
   const isLinkedInSender = senderLower.includes("linkedin.com");
-  const linkedInApplyMatch = sourceText.match(
-    /your application was sent to\s+([^\n\r.,;:!?]+?)(?:[.,;:!?]|\n|\r|$)/i,
-  );
-  if (isLinkedInSender && linkedInApplyMatch?.[1]) {
+  if (isLinkedInSender && /your application was sent to\s+/i.test(sourceText)) {
     return {
       type: ReviewItemType.new_application,
       confidence: 0.9,
-      company: linkedInApplyMatch[1].trim(),
-      role: role ?? null,
+      company,
+      role,
       location,
       suggestedStatus: ApplicationStatus.Applied,
       taskTitle: null,
-      reason: "LinkedIn Easy Apply application-sent pattern detected",
+      reason: extraction.reason,
+    };
+  }
+
+  if (/thank you for applying for\s+.+?\s+(?:role|position)\s+at\s+/i.test(sourceText)) {
+    return {
+      type: ReviewItemType.new_application,
+      confidence: 0.93,
+      company,
+      role,
+      location,
+      suggestedStatus: ApplicationStatus.Applied,
+      taskTitle: null,
+      reason: extraction.reason,
     };
   }
 
@@ -427,7 +669,7 @@ export function classifyGmailMessage(input: ClassifierInput): ClassificationResu
       location,
       suggestedStatus: ApplicationStatus.Rejected,
       taskTitle: null,
-      reason: "Rejection phrase detected",
+      reason: extraction.reason || "Rejection phrase detected",
     };
   }
 
@@ -440,7 +682,7 @@ export function classifyGmailMessage(input: ClassifierInput): ClassificationResu
       location,
       suggestedStatus: ApplicationStatus.Applied,
       taskTitle: null,
-      reason: "Application confirmation phrase detected",
+      reason: extraction.reason || "Application confirmation phrase detected",
     };
   }
 
@@ -543,4 +785,13 @@ Inline classifier examples (no test harness currently configured):
 11) Sender: Rolfson Oil <noreply@applytojob.com>
     Subject/snippet: "Saad, we've received your resume ... interest in employment at Rolfson Oil ... reviewed by our recruiting team"
     Expected: type=new_application, company="Rolfson Oil", role=null, suggestedStatus=Applied, confidence around 0.9.
+
+12) Sender: LinkedIn <jobs-noreply@linkedin.com>
+    Subject: "Saad Salman, your application was sent to CareerXperts Consulting"
+    Body/snippet lines: "Associate Software Engineer" / "CareerXperts Consulting · United States (Remote)"
+    Expected: company="CareerXperts Consulting", role="Associate Software Engineer", location="United States (Remote)".
+
+13) Sender: Ashby <notifications@ashbyhq.com>
+    Subject: "Thank you for applying for the Infrastructure Administrator I, Cloud AI Role at Illumio!"
+    Expected: company="Illumio", role="Infrastructure Administrator I, Cloud AI".
 */
