@@ -2,9 +2,12 @@ import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { ApplicationStatus } from "@prisma/client";
 import { DEMO_SOURCES, yesterdayInChicagoDate } from "@/lib/demoData";
+import { requireDemoMode } from "@/lib/demoMode";
 
 export async function POST() {
   try {
+    requireDemoMode();
+
     const existing = await prisma.application.findFirst({
       where: {
         source: DEMO_SOURCES.application,
@@ -42,6 +45,9 @@ export async function POST() {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
+    if (message === "DEMO_MODE_REQUIRED") {
+      return NextResponse.json({ error: "Demo data endpoints require DEMO_MODE=true." }, { status: 403 });
+    }
     return NextResponse.json({ error: `Failed to seed demo existing application: ${message}` }, { status: 500 });
   }
 }

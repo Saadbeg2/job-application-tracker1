@@ -1,9 +1,17 @@
 import { createTrackerSpreadsheet } from "@/lib/googleSheets";
+import { isDemoMode } from "@/lib/demoMode";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
 export async function POST() {
   try {
+    if (isDemoMode()) {
+      return NextResponse.json(
+        { error: "Google Sheets creation is disabled in Demo Mode. No real spreadsheet was created." },
+        { status: 403 },
+      );
+    }
+
     const sheet = await createTrackerSpreadsheet(prisma);
     return NextResponse.json({
       ok: true,

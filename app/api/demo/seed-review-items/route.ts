@@ -1,9 +1,12 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 import { demoReviewItemsSeedData } from "@/lib/demoData";
+import { requireDemoMode } from "@/lib/demoMode";
 
 export async function POST() {
   try {
+    requireDemoMode();
+
     const now = new Date();
     const demoItems = demoReviewItemsSeedData(now);
 
@@ -34,6 +37,9 @@ export async function POST() {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
+    if (message === "DEMO_MODE_REQUIRED") {
+      return NextResponse.json({ error: "Demo data endpoints require DEMO_MODE=true." }, { status: 403 });
+    }
     return NextResponse.json({ error: `Failed to load demo review items: ${message}` }, { status: 500 });
   }
 }

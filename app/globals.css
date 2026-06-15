@@ -542,6 +542,23 @@ tbody tr:last-child td {
   gap: 0.35rem;
 }
 
+.demo-mode-banner {
+  position: sticky;
+  top: 0;
+  z-index: 60;
+  border-bottom: 1px solid rgba(94, 106, 210, 0.28);
+  background:
+    linear-gradient(90deg, rgba(94, 106, 210, 0.22), rgba(10, 10, 12, 0.92)),
+    rgba(10, 10, 12, 0.94);
+  color: var(--foreground);
+  font-size: 0.84rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 0.6rem 1rem;
+  text-align: center;
+  box-shadow: 0 12px 40px rgba(94, 106, 210, 0.16);
+}
+
 a {
   color: color-mix(in srgb, var(--accent-bright) 84%, white 16%);
 }

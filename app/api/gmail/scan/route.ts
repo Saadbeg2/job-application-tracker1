@@ -11,6 +11,8 @@ import { prisma } from "@/lib/prisma";
 import { ReviewStatus } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { dateToChicagoStoredDate, toChicagoDateKey } from "@/lib/dates";
+import { demoReviewItemsSeedData, DEMO_SOURCES } from "@/lib/demoData";
+import { isDemoMode } from "@/lib/demoMode";
 
 function needsBodyFallback(classified: ReturnType<typeof classifyGmailMessage>) {
   if (classified.confidence <= 0.2) return false;
@@ -24,6 +26,65 @@ export async function POST() {
   const { start: scanWindowStart, end: scanWindowEnd } = scanWindow();
 
   try {
+    if (isDemoMode()) {
+      const demoItems = demoReviewItemsSeedData(scanStartedAt);
+
+      await prisma.$transaction(async (tx) => {
+        await tx.reviewItem.deleteMany({
+          where: {
+            OR: [
+              { source: DEMO_SOURCES.gmail },
+              { gmailMessageId: { startsWith: "demo-gmail-" } },
+            ],
+          },
+        });
+        await tx.emailMetadata.deleteMany({
+          where: { gmailMessageId: { startsWith: "demo-gmail-" } },
+        });
+
+        for (const item of demoItems) {
+          await tx.reviewItem.create({
+            data: {
+              ...item,
+              reviewStatus: ReviewStatus.pending,
+            },
+          });
+          await tx.emailMetadata.create({
+            data: {
+              gmailMessageId: item.gmailMessageId ?? crypto.randomUUID(),
+              threadId: item.threadId,
+              sender: item.emailSender,
+              subject: item.emailSubject,
+              receivedAt: item.emailReceivedAt,
+              detectedType: mapDetectedType(item.type),
+              confidence: item.confidence,
+            },
+          });
+        }
+
+        await tx.scanHistory.create({
+          data: {
+            scanStartedAt,
+            scanEndedAt: new Date(),
+            scanWindowStart,
+            scanWindowEnd,
+            resultCount: demoItems.length,
+            createdReviewItemsCount: demoItems.length,
+          },
+        });
+      });
+
+      return NextResponse.json({
+        demoMode: true,
+        scannedMessages: demoItems.length,
+        createdReviewItems: demoItems.length,
+        skippedDuplicates: 0,
+        scanWindowStart: scanWindowStart.toISOString(),
+        scanWindowEnd: scanWindowEnd.toISOString(),
+        message: "Demo Gmail scan complete. Sample review items refreshed from local fixtures.",
+      });
+    }
+
     const { accessToken } = await getValidAccessToken(prisma);
     const ids = await listJobRelatedMessageIds(accessToken);
 

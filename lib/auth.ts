@@ -65,6 +65,9 @@ export function adminEmail() {
 }
 
 export function guestAccessCode() {
+  if (process.env.DEMO_MODE?.trim().toLowerCase() === "true") {
+    return process.env.DEMO_GUEST_ACCESS_CODE?.trim() || process.env.GUEST_ACCESS_CODE?.trim() || "";
+  }
   return process.env.GUEST_ACCESS_CODE?.trim() || "";
 }
 

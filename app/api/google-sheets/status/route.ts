@@ -1,9 +1,26 @@
 import { sheetsStatus } from "@/lib/googleSheets";
+import { isDemoMode } from "@/lib/demoMode";
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
 export async function GET() {
   try {
+    if (isDemoMode()) {
+      return NextResponse.json({
+        connected: false,
+        googleConnected: false,
+        missingScope: false,
+        envConfigured: false,
+        spreadsheetId: null,
+        spreadsheetUrl: null,
+        lastSyncedAt: null,
+        lastSyncStatus: "disabled",
+        lastSyncError: null,
+        demoMode: true,
+        message: "Google Sheets sync is disabled in Demo Mode. No real spreadsheet is connected.",
+      });
+    }
+
     const status = await sheetsStatus(prisma);
     let message: string | null = null;
     if (!status.googleConnected) {

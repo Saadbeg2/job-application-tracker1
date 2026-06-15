@@ -31,6 +31,7 @@ type SheetsStatus = {
   lastSyncedAt?: string | null;
   lastSyncStatus?: string | null;
   lastSyncError?: string | null;
+  demoMode?: boolean;
 };
 
 async function readJsonSafe<T>(response: Response): Promise<T | null> {
@@ -159,6 +160,9 @@ export default function SettingsPage() {
 
       <div className="card stack">
         <h3>Google Sheets Sync</h3>
+        {sheetsStatus?.demoMode ? (
+          <p className="muted">Demo Mode uses sample data only. Real Google Sheets sync and spreadsheet links are disabled.</p>
+        ) : null}
         <p><strong>Sheet Configured:</strong> {sheetsStatus?.spreadsheetId ? "Yes" : "No"}</p>
         <p><strong>Spreadsheet ID:</strong> {sheetsStatus?.spreadsheetId ?? "-"}</p>
         <p><strong>Last Synced:</strong> {sheetsStatus?.lastSyncedAt ? new Date(sheetsStatus.lastSyncedAt).toLocaleString() : "Never"}</p>
@@ -173,7 +177,7 @@ export default function SettingsPage() {
           <button
             className="secondary"
             type="button"
-            disabled={loading === "sync"}
+            disabled={loading === "sync" || sheetsStatus?.demoMode}
             onClick={() => void callAction("sync", "/api/google-sheets/sync", { method: "POST" })}
           >
             Re-sync Google Sheet
@@ -181,7 +185,7 @@ export default function SettingsPage() {
           <button
             className="danger"
             type="button"
-            disabled={loading === "disconnect-sheet"}
+            disabled={loading === "disconnect-sheet" || sheetsStatus?.demoMode}
             onClick={() => void callAction("disconnect-sheet", "/api/google-sheets/disconnect", { method: "POST" })}
           >
             Disconnect Sheet
@@ -197,17 +201,18 @@ export default function SettingsPage() {
           <label>
             Connect Existing Spreadsheet ID/URL (Advanced Fallback)
             <input
-              value={sheetInput}
-              onChange={(event) => setSheetInput(event.target.value)}
-              placeholder="Spreadsheet ID or full URL"
-            />
+            value={sheetInput}
+            onChange={(event) => setSheetInput(event.target.value)}
+            placeholder="Spreadsheet ID or full URL"
+            disabled={sheetsStatus?.demoMode}
+          />
           </label>
         </div>
         <div className="actions">
           <button
             className="secondary"
             type="button"
-            disabled={loading === "connect"}
+            disabled={loading === "connect" || sheetsStatus?.demoMode}
             onClick={() =>
               void callAction("connect", "/api/google-sheets/connect", {
                 method: "POST",

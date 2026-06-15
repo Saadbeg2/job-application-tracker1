@@ -49,7 +49,8 @@ export default function DemoPage() {
       <div className="card stack">
         <h3>Demo Controls</h3>
         <p className="muted">
-          Use this page to run a full end-to-end walkthrough without relying on real Gmail scan data.
+          Use this page to inspect demo helpers. In the full demo environment, prefer running{" "}
+          <code>npm run seed:demo</code> against a separate demo database.
         </p>
 
         <div className="actions">
@@ -85,16 +86,15 @@ export default function DemoPage() {
       <div className="card stack">
         <h3>Walkthrough Checklist</h3>
         <ol className="stack" style={{ gap: "0.5rem", paddingLeft: "1.25rem" }}>
-          <li>Load demo data</li>
+          <li>Seed the demo database with sample-only data</li>
           <li>Go to Review Queue</li>
-          <li>Approve Dow application</li>
-          <li>Edit BrothersTech role and approve</li>
-          <li>Match Agoda rejection to Agoda application</li>
-          <li>Approve Amazon assessment task</li>
-          <li>Use Create missing application for Nagarro interview</li>
+          <li>Run Demo Gmail Scan to refresh sample ReviewItems</li>
+          <li>Approve the Squadron Data LinkedIn application</li>
+          <li>Match or backfill the CoreBank interview update</li>
+          <li>Review the BrightHealth rejection update</li>
           <li>Check Applications and Tasks pages</li>
-          <li>Re-sync Google Sheet</li>
-          <li>Send test report</li>
+          <li>Open the guest dashboard with the demo guest access code</li>
+          <li>Confirm Sheets sync and email sending are disabled in demo mode</li>
         </ol>
       </div>
 
@@ -105,14 +105,6 @@ export default function DemoPage() {
           <Link className="secondary" href="/applications">Applications</Link>
           <Link className="secondary" href="/tasks">Tasks</Link>
           <Link className="secondary" href="/settings">Settings / Google Sheets Sync</Link>
-          <button
-            className="secondary"
-            type="button"
-            disabled={loadingKey === "send-test"}
-            onClick={() => void runAction("send-test", "/api/reports/send-test")}
-          >
-            Send Test Report
-          </button>
         </div>
       </div>
     </section>

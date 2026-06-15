@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { getAdminSession } from "@/lib/authServer";
+import { demoModeMessage, isDemoMode } from "@/lib/demoMode";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -14,10 +15,16 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const session = await getAdminSession();
+  const demoMode = isDemoMode();
 
   return (
     <html lang="en">
       <body>
+        {demoMode ? (
+          <div className="demo-mode-banner" role="status">
+            {demoModeMessage()}
+          </div>
+        ) : null}
         <header className="topbar">
           <div className="container topbar-inner">
             <h1>Job Accountability Tracker</h1>

@@ -1,10 +1,18 @@
 import { buildDailyReport } from "@/lib/dailyReport";
+import { isDemoMode } from "@/lib/demoMode";
 import { prisma } from "@/lib/prisma";
 import { sendReportEmail } from "@/lib/reportMailer";
 import { ReportSendStatus } from "@prisma/client";
 import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
+  if (isDemoMode()) {
+    return NextResponse.json(
+      { error: "Email reports are disabled in Demo Mode. No real email was sent." },
+      { status: 403 },
+    );
+  }
+
   const body = (await request.json().catch(() => ({}))) as { recipientId?: number; all?: boolean };
   const forceAll = body.all === true;
 

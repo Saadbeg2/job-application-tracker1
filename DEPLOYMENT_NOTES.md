@@ -32,6 +32,8 @@ Do not deploy this app publicly until admin auth environment variables are confi
    AUTH_URL="http://localhost:3000"
    ADMIN_EMAIL="your-email@example.com"
    GUEST_ACCESS_CODE="shared-code-for-read-only-dashboard"
+   DEMO_MODE="false"
+   DEMO_GUEST_ACCESS_CODE="optional-demo-only-guest-code"
    ```
 
 4. Apply local Prisma migrations and generate the client:
@@ -138,6 +140,8 @@ The app currently requests Gmail read-only and Google Sheets scopes during the s
 - `GOOGLE_AUTH_CLIENT_SECRET`
 - `ADMIN_EMAIL`
 - `GUEST_ACCESS_CODE`
+- `DEMO_MODE`
+- `DEMO_GUEST_ACCESS_CODE`
 
 ### Google OAuth / Gmail
 
@@ -222,6 +226,34 @@ Schema notes:
 - Private pages and APIs are protected by `proxy.ts`.
 - Static assets, `/api/auth/*`, and the guest access-code endpoints remain public.
 - Guest users can access only `/` and the read-only guest summary API.
+
+## Safe Demo Environment
+
+Use a separate database and separate environment for demos. Do not point demo mode at the production Neon database.
+
+Demo mode is controlled by:
+
+```env
+DEMO_MODE="true"
+DEMO_GUEST_ACCESS_CODE="<shared-demo-access-code>"
+```
+
+When `DEMO_MODE=true`:
+
+- The app shows a visible “Demo Mode — sample data only” banner.
+- The Review Queue Gmail scan button runs a local sample-email scan and does not call Gmail.
+- Google Sheets sync/create/connect endpoints are disabled and return friendly JSON errors.
+- Guest dashboard hides real Google Sheet links.
+- Daily report send endpoints are disabled and do not send email.
+- Demo helper endpoints require `DEMO_MODE=true`.
+
+Seed a demo database with:
+
+```bash
+npm run seed:demo
+```
+
+The seed script refuses to run unless `DEMO_MODE=true`. It clears the connected demo database and inserts sample Applications, Tasks, ReviewItems, and Guest Company Suggestions. Verify `DATABASE_URL` points to a disposable demo database before running it.
 
 ## Secret Safety Notes
 

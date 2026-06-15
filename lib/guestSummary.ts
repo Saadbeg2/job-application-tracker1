@@ -1,6 +1,7 @@
 import { countApplicationsForTodayAndWeek } from "@/lib/analytics";
 import { dateOnlyKeyFromStoredDate, getTodayChicagoDateKey } from "@/lib/dates";
 import { getConfiguredGoogleSheetUrl } from "@/lib/dailyReport";
+import { isDemoMode } from "@/lib/demoMode";
 import { ApplicationStatus, PrismaClient, TaskStatus } from "@prisma/client";
 
 type InterviewPipelineRow = {
@@ -110,6 +111,6 @@ export async function getGuestDashboardSummary(prisma: PrismaClient) {
     activeTasksCount,
     followUpDueCount,
     interviewPipeline,
-    googleSheetUrl: getConfiguredGoogleSheetUrl(syncConfig?.spreadsheetUrl ?? null),
+    googleSheetUrl: isDemoMode() ? null : getConfiguredGoogleSheetUrl(syncConfig?.spreadsheetUrl ?? null),
   };
 }
