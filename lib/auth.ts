@@ -1,6 +1,7 @@
 export const AUTH_SESSION_COOKIE = "jat_admin_session";
 export const AUTH_STATE_COOKIE = "jat_auth_state";
 export const GUEST_SESSION_COOKIE = "jat_guest_session";
+export const DEMO_ADMIN_SESSION_COOKIE = "jat_demo_admin_session";
 
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
 const STATE_TTL_SECONDS = 60 * 10;
@@ -12,6 +13,11 @@ type AdminSession = {
 
 type GuestSession = {
   role: "guest";
+  exp: number;
+};
+
+type DemoAdminSession = {
+  role: "demo_admin";
   exp: number;
 };
 
@@ -69,6 +75,10 @@ export function guestAccessCode() {
     return process.env.DEMO_GUEST_ACCESS_CODE?.trim() || process.env.GUEST_ACCESS_CODE?.trim() || "";
   }
   return process.env.GUEST_ACCESS_CODE?.trim() || "";
+}
+
+function isDemoModeEnabled() {
+  return process.env.DEMO_MODE?.trim().toLowerCase() === "true";
 }
 
 export function googleAuthClientId() {
@@ -155,6 +165,19 @@ export async function createGuestSessionCookieValue() {
   return signPayload(base64UrlEncode(JSON.stringify(session)), secret);
 }
 
+export async function createDemoAdminSessionCookieValue() {
+  const secret = authSecret();
+  if (!secret) throw new Error("Missing AUTH_SECRET");
+  if (!isDemoModeEnabled()) throw new Error("DEMO_MODE_REQUIRED");
+
+  const session: DemoAdminSession = {
+    role: "demo_admin",
+    exp: Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS,
+  };
+
+  return signPayload(base64UrlEncode(JSON.stringify(session)), secret);
+}
+
 export async function readSessionCookieValue(value: string | undefined) {
   const secret = authSecret();
   if (!secret || !value) return null;
@@ -167,6 +190,24 @@ export async function readSessionCookieValue(value: string | undefined) {
     if (!session.email || !session.exp || session.exp < Math.floor(Date.now() / 1000)) return null;
     const allowedEmail = adminEmail();
     if (!allowedEmail || session.email !== allowedEmail) return null;
+    return session;
+  } catch {
+    return null;
+  }
+}
+
+export async function readDemoAdminSessionCookieValue(value: string | undefined) {
+  const secret = authSecret();
+  if (!isDemoModeEnabled() || !secret || !value) return null;
+
+  const payload = await verifySignedValue(value, secret);
+  if (!payload) return null;
+
+  try {
+    const session = JSON.parse(base64UrlDecode(payload)) as DemoAdminSession;
+    if (session.role !== "demo_admin" || !session.exp || session.exp < Math.floor(Date.now() / 1000)) {
+      return null;
+    }
     return session;
   } catch {
     return null;

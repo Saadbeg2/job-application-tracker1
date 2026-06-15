@@ -196,6 +196,11 @@ nav a:hover,
   letter-spacing: -0.025em;
 }
 
+.demo-admin-entry {
+  border-top: 1px solid var(--border-default);
+  padding-top: 0.95rem;
+}
+
 .guest-dashboard {
   width: min(980px, 100%);
   margin: 0 auto;

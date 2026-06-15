@@ -241,11 +241,13 @@ DEMO_GUEST_ACCESS_CODE="<shared-demo-access-code>"
 When `DEMO_MODE=true`:
 
 - The app shows a visible “Demo Mode — sample data only” banner.
+- The public landing page shows a “View Demo Admin” button that opens the admin UI with a demo-only session cookie.
 - The Review Queue Gmail scan button runs a local sample-email scan and does not call Gmail.
 - Google Sheets sync/create/connect endpoints are disabled and return friendly JSON errors.
 - Guest dashboard hides real Google Sheet links.
 - Daily report send endpoints are disabled and do not send email.
 - Demo helper endpoints require `DEMO_MODE=true`.
+- Normal production deployments with `DEMO_MODE=false` do not honor the demo admin bypass and keep Google admin login protection.
 
 Seed a demo database with:
 

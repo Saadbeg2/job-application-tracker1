@@ -5,6 +5,7 @@ import {
 } from "@/app/_components/guest-company-suggestions-admin";
 import { GuestCompanySuggestionForm } from "@/app/_components/guest-company-suggestion-form";
 import { getAdminSession, getGuestSession } from "@/lib/authServer";
+import { isDemoMode } from "@/lib/demoMode";
 import { ensureFollowUpTasks } from "@/lib/followUpTasks";
 import { getGuestDashboardSummary } from "@/lib/guestSummary";
 import { prisma } from "@/lib/prisma";
@@ -36,7 +37,7 @@ function formatGuestInterviewDate(value: string | null) {
   return date.toLocaleString();
 }
 
-function GuestAccessScreen({ invalid }: { invalid: boolean }) {
+function GuestAccessScreen({ invalid, demoMode }: { invalid: boolean; demoMode: boolean }) {
   return (
     <section className="guest-access-page">
       <div className="card guest-access-card stack">
@@ -56,6 +57,15 @@ function GuestAccessScreen({ invalid }: { invalid: boolean }) {
             View Dashboard
           </button>
         </form>
+
+        {demoMode ? (
+          <div className="demo-admin-entry stack compact-stack">
+            <p className="muted">Explore the tracker with sample data only.</p>
+            <a className="secondary guest-button" href="/demo/admin">
+              View Demo Admin
+            </a>
+          </div>
+        ) : null}
       </div>
     </section>
   );
@@ -319,6 +329,7 @@ async function AdminDashboard() {
 }
 
 export default async function HomePage({ searchParams }: HomePageProps) {
+  const demoMode = isDemoMode();
   const [adminSession, guestSession, params] = await Promise.all([
     getAdminSession(),
     getGuestSession(),
@@ -328,5 +339,5 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   if (adminSession) return AdminDashboard();
   if (guestSession) return GuestDashboard();
 
-  return <GuestAccessScreen invalid={params.guest === "invalid"} />;
+  return <GuestAccessScreen invalid={params.guest === "invalid"} demoMode={demoMode} />;
 }

@@ -1,12 +1,14 @@
 import { NextResponse, type NextRequest } from "next/server";
 import {
   AUTH_SESSION_COOKIE,
+  DEMO_ADMIN_SESSION_COOKIE,
   GUEST_SESSION_COOKIE,
+  readDemoAdminSessionCookieValue,
   readGuestSessionCookieValue,
   readSessionCookieValue,
 } from "@/lib/auth";
 
-const PUBLIC_PATHS = ["/", "/login"];
+const PUBLIC_PATHS = ["/", "/login", "/demo/admin"];
 const PUBLIC_API_PREFIXES = ["/api/auth", "/api/guest/login", "/api/guest/logout"];
 const GUEST_API_PATHS = ["/api/guest/summary", "/api/guest/company-suggestions"];
 const GUEST_PAGE_PATHS = ["/"];
@@ -41,6 +43,9 @@ export async function proxy(request: NextRequest) {
 
   const adminSession = await readSessionCookieValue(request.cookies.get(AUTH_SESSION_COOKIE)?.value);
   if (adminSession) return NextResponse.next();
+
+  const demoAdminSession = await readDemoAdminSessionCookieValue(request.cookies.get(DEMO_ADMIN_SESSION_COOKIE)?.value);
+  if (demoAdminSession) return NextResponse.next();
 
   const guestSession = await readGuestSessionCookieValue(request.cookies.get(GUEST_SESSION_COOKIE)?.value);
   if (guestSession && (isGuestPage(pathname) || isGuestApi(pathname))) return NextResponse.next();
