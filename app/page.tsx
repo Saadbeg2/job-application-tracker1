@@ -157,6 +157,38 @@ async function GuestDashboard() {
         )}
       </section>
 
+      <section className="card stack">
+        <div>
+          <h3 className="section-title">Recent Applications</h3>
+          <p className="muted">Last 25 applications submitted</p>
+        </div>
+
+        {summary.recentApplications.length > 0 ? (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Company</th>
+                  <th>Role</th>
+                  <th>Date applied</th>
+                </tr>
+              </thead>
+              <tbody>
+                {summary.recentApplications.map((application, index) => (
+                  <tr key={`${application.company}-${application.role}-${application.dateApplied}-${index}`}>
+                    <td>{application.company}</td>
+                    <td>{application.role}</td>
+                    <td>{application.dateApplied}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="muted">No recent applications yet.</p>
+        )}
+      </section>
+
       <GuestCompanySuggestionForm />
 
       <div className="grid two-column-grid">

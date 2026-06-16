@@ -34,7 +34,15 @@ export async function getGuestDashboardSummary(prisma: PrismaClient) {
   const todayKey = getTodayChicagoDateKey();
   const yesterdayKey = previousDateKey(todayKey);
 
-  const [applications, statusGroups, activeTasksCount, followUpDueCount, syncConfig, interviewApplications] = await Promise.all([
+  const [
+    applications,
+    statusGroups,
+    activeTasksCount,
+    followUpDueCount,
+    syncConfig,
+    interviewApplications,
+    recentApplications,
+  ] = await Promise.all([
     prisma.application.findMany({
       select: { id: true, company: true, dateApplied: true },
     }),
@@ -64,6 +72,15 @@ export async function getGuestDashboardSummary(prisma: PrismaClient) {
       WHERE "status" = 'Interview'
       ORDER BY "interviewDate" ASC NULLS LAST, "updatedAt" DESC
     `,
+    prisma.application.findMany({
+      select: {
+        company: true,
+        role: true,
+        dateApplied: true,
+      },
+      orderBy: [{ dateApplied: "desc" }, { createdAt: "desc" }],
+      take: 25,
+    }),
   ]);
 
   const { applicationsToday, applicationsThisWeek } = countApplicationsForTodayAndWeek(applications);
@@ -111,6 +128,11 @@ export async function getGuestDashboardSummary(prisma: PrismaClient) {
     activeTasksCount,
     followUpDueCount,
     interviewPipeline,
+    recentApplications: recentApplications.map((application) => ({
+      company: application.company,
+      role: application.role,
+      dateApplied: dateOnlyKeyFromStoredDate(application.dateApplied),
+    })),
     googleSheetUrl: isDemoMode() ? null : getConfiguredGoogleSheetUrl(syncConfig?.spreadsheetUrl ?? null),
   };
 }
